@@ -7,5 +7,5 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext"
   },
-  "include": ["server.ts", "main.ts", "db.ts"]
+  "include": ["src/server"]
 }

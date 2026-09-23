@@ -11,6 +11,7 @@ const isDevelopment = process.env.NODE_ENV === "development";
 
 export default defineConfig({
   plugins: [react(), viteSingleFile()],
+  root: "src/client",
   build: {
     sourcemap: isDevelopment ? "inline" : undefined,
     cssMinify: !isDevelopment,
@@ -18,7 +19,7 @@ export default defineConfig({
     rollupOptions: {
       input: INPUT,
     },
-    outDir: "dist",
+    outDir: "../../dist",
     emptyOutDir: false,
   },
 });

@@ -6,11 +6,21 @@ import {
   QueryCommand,
 } from "@aws-sdk/lib-dynamodb";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { BedrockAgentRuntimeClient, RetrieveCommand } from "@aws-sdk/client-bedrock-agent-runtime";
+import {
+  BedrockAgentRuntimeClient,
+  RetrieveCommand,
+} from "@aws-sdk/client-bedrock-agent-runtime";
+import {
+  BedrockAgentClient,
+  StartIngestionJobCommand,
+} from "@aws-sdk/client-bedrock-agent";
 import { randomUUID } from "node:crypto";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
-const bedrockAgent = new BedrockAgentRuntimeClient({ region: process.env.AWS_REGION ?? "us-east-1" });
+const bedrockAgentRuntime = new BedrockAgentRuntimeClient({ region: process.env.AWS_REGION ?? "us-east-1" });
+const bedrockAgent = new BedrockAgentClient({ region: process.env.AWS_REGION ?? "us-east-1" });
+
+const KB_DATA_SOURCE_ID = process.env.FOLKORE_KB_DATA_SOURCE_ID ?? "";
 
 const KB_ID     = process.env.FOLKORE_KB_ID     ?? "8TRTP9TPP2";
 const KB_BUCKET = process.env.FOLKORE_KB_BUCKET ?? "folkore-memory-kb";
@@ -87,7 +97,7 @@ export async function addMemory(
 
   await db.send(new PutCommand({ TableName: TABLES.memory_graph, Item: memory }));
 
-  // Sync to S3 so Bedrock Knowledge Base can index it for semantic retrieval
+  // Write to S3 and trigger KB re-ingestion so the memory is immediately searchable
   const doc = `who: ${who}\nwhat: ${what}\nwhen: ${when}\ntags: ${tags.join(", ")}`;
   await s3.send(new PutObjectCommand({
     Bucket: KB_BUCKET,
@@ -96,6 +106,14 @@ export async function addMemory(
     ContentType: "text/plain",
     Metadata: { person_id, memory_id: memory.memory_id, type },
   }));
+
+  // Fire-and-forget — don't block the curation response on KB indexing
+  if (KB_DATA_SOURCE_ID) {
+    bedrockAgent.send(new StartIngestionJobCommand({
+      knowledgeBaseId: KB_ID,
+      dataSourceId: KB_DATA_SOURCE_ID,
+    })).catch((err) => console.error("KB ingestion trigger failed:", err));
+  }
 
   return memory;
 }
@@ -118,29 +136,25 @@ export async function getMemory(
   }
 
   // Semantic retrieval via Bedrock Knowledge Base
+  // KB does not propagate custom S3 metadata — filter by person_id post-retrieval via DynamoDB lookup.
+  // URI format: s3://folkore-memory-kb/memories/{person_id}/{memory_id}.txt
   if (query) {
-    const kbResult = await bedrockAgent.send(new RetrieveCommand({
+    const kbResult = await bedrockAgentRuntime.send(new RetrieveCommand({
       knowledgeBaseId: KB_ID,
       retrievalQuery: { text: query },
       retrievalConfiguration: {
-        vectorSearchConfiguration: {
-          numberOfResults: 5,
-          filter: {
-            equals: { key: "person_id", value: { stringValue: person_id } },
-          },
-        },
+        vectorSearchConfiguration: { numberOfResults: 10 },
       },
     }));
 
     const memoryIds = (kbResult.retrievalResults ?? [])
       .map((r) => {
-        // Custom metadata not propagated by Bedrock KB — extract memory_id from S3 URI
-        // URI format: s3://folkore-memory-kb/memories/{person_id}/{memory_id}.txt
         const uri = r.location?.s3Location?.uri ?? "";
-        const match = uri.match(/\/memories\/[^/]+\/([^/]+)\.txt$/);
-        return match?.[1] ?? (r.metadata?.["memory_id"] as string);
+        const match = uri.match(/\/memories\/([^/]+)\/([^/]+)\.txt$/);
+        if (!match || match[1] !== person_id) return null;
+        return match[2];
       })
-      .filter(Boolean);
+      .filter((id): id is string => !!id);
 
     const memories = await Promise.all(
       memoryIds.map((id) =>
@@ -148,7 +162,17 @@ export async function getMemory(
           .then((r) => r.Item as Memory | undefined)
       )
     );
-    return memories.filter((m): m is Memory => !!m);
+    const found = memories.filter((m): m is Memory => !!m);
+
+    // Update last_referenced for all surfaced memories
+    await Promise.all(found.map((m) =>
+      db.send(new PutCommand({
+        TableName: TABLES.memory_graph,
+        Item: { ...m, last_referenced: new Date().toISOString(), reference_count: m.reference_count + 1 },
+      }))
+    ));
+
+    return found;
   }
 
   // Full scan filtered by tag or all
