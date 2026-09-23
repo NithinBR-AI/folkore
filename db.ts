@@ -5,7 +5,15 @@ import {
   GetCommand,
   QueryCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { BedrockAgentRuntimeClient, RetrieveCommand } from "@aws-sdk/client-bedrock-agent-runtime";
 import { randomUUID } from "node:crypto";
+
+const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
+const bedrockAgent = new BedrockAgentRuntimeClient({ region: process.env.AWS_REGION ?? "us-east-1" });
+
+const KB_ID     = process.env.FOLKORE_KB_ID     ?? "8TRTP9TPP2";
+const KB_BUCKET = process.env.FOLKORE_KB_BUCKET ?? "folkore-memory-kb";
 
 const client = new DynamoDBClient({ region: process.env.AWS_REGION ?? "us-east-1" });
 const db = DynamoDBDocumentClient.from(client);
@@ -78,12 +86,29 @@ export async function addMemory(
   };
 
   await db.send(new PutCommand({ TableName: TABLES.memory_graph, Item: memory }));
+
+  // Sync to S3 so Bedrock Knowledge Base can index it for semantic retrieval
+  const doc = `who: ${who}\nwhat: ${what}\nwhen: ${when}\ntags: ${tags.join(", ")}`;
+  await s3.send(new PutObjectCommand({
+    Bucket: KB_BUCKET,
+    Key: `memories/${person_id}/${memory.memory_id}.txt`,
+    Body: doc,
+    ContentType: "text/plain",
+    Metadata: { person_id, memory_id: memory.memory_id, type },
+  }));
+
   return memory;
 }
 
 // ── get_memory ────────────────────────────────────────────────────────────────
 
-export async function getMemory(person_id: string, memory_id?: string, tag?: string): Promise<Memory[]> {
+export async function getMemory(
+  person_id: string,
+  memory_id?: string,
+  tag?: string,
+  query?: string,
+): Promise<Memory[]> {
+  // Exact lookup by ID
   if (memory_id) {
     const result = await db.send(new GetCommand({
       TableName: TABLES.memory_graph,
@@ -92,6 +117,41 @@ export async function getMemory(person_id: string, memory_id?: string, tag?: str
     return result.Item ? [result.Item as Memory] : [];
   }
 
+  // Semantic retrieval via Bedrock Knowledge Base
+  if (query) {
+    const kbResult = await bedrockAgent.send(new RetrieveCommand({
+      knowledgeBaseId: KB_ID,
+      retrievalQuery: { text: query },
+      retrievalConfiguration: {
+        vectorSearchConfiguration: {
+          numberOfResults: 5,
+          filter: {
+            equals: { key: "person_id", value: { stringValue: person_id } },
+          },
+        },
+      },
+    }));
+
+    const memoryIds = (kbResult.retrievalResults ?? [])
+      .map((r) => {
+        // Custom metadata not propagated by Bedrock KB — extract memory_id from S3 URI
+        // URI format: s3://folkore-memory-kb/memories/{person_id}/{memory_id}.txt
+        const uri = r.location?.s3Location?.uri ?? "";
+        const match = uri.match(/\/memories\/[^/]+\/([^/]+)\.txt$/);
+        return match?.[1] ?? (r.metadata?.["memory_id"] as string);
+      })
+      .filter(Boolean);
+
+    const memories = await Promise.all(
+      memoryIds.map((id) =>
+        db.send(new GetCommand({ TableName: TABLES.memory_graph, Key: { person_id, memory_id: id } }))
+          .then((r) => r.Item as Memory | undefined)
+      )
+    );
+    return memories.filter((m): m is Memory => !!m);
+  }
+
+  // Full scan filtered by tag or all
   const result = await db.send(new QueryCommand({
     TableName: TABLES.memory_graph,
     KeyConditionExpression: "person_id = :pid",

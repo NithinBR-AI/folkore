@@ -14,6 +14,7 @@ import {
   getInsightSummary,
   surfaceMorningMemory,
 } from "./db.js";
+import { generateAlexaResponse, generateInsightNarrative } from "./llm.js";
 
 const DIST_DIR = import.meta.filename.endsWith(".ts")
   ? path.join(import.meta.dirname, "dist")
@@ -62,11 +63,12 @@ export function createServer(): McpServer {
         person_id: z.string().describe("Parent's unique ID"),
         memory_id: z.string().optional().describe("Specific memory ID"),
         tag:       z.string().optional().describe("Filter by tag"),
+        query:     z.string().optional().describe("Natural language semantic search, e.g. 'what does dad remember about family?'"),
       }),
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async (args): Promise<CallToolResult> => {
-      const results = await getMemory(args.person_id, args.memory_id, args.tag);
+      const results = await getMemory(args.person_id, args.memory_id, args.tag, args.query);
       return {
         content: [{ type: "text", text: JSON.stringify(results, null, 2) }],
         _meta: { folkore: { action: "get_memory", memories: results } },
@@ -113,7 +115,7 @@ export function createServer(): McpServer {
     "get_insight_summary",
     {
       title: "Insight Summary",
-      description: "Return aggregate stats: mood trends, memory counts, top tags, confusion rate.",
+      description: "Return aggregate stats: mood trends, memory counts, top tags, confusion rate — with a narrative for family caregivers.",
       inputSchema: z.object({
         person_id: z.string().describe("Parent's unique ID"),
       }),
@@ -121,9 +123,44 @@ export function createServer(): McpServer {
     },
     async (args): Promise<CallToolResult> => {
       const summary = await getInsightSummary(args.person_id);
+      let narrative = "";
+      try {
+        narrative = await generateInsightNarrative(
+          summary.total_memories,
+          summary.total_interactions,
+          summary.mood_counts,
+          summary.top_tags,
+          summary.confusion_rate,
+        );
+      } catch {
+        narrative = "Unable to generate narrative — check Mantel API key.";
+      }
       return {
-        content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
-        _meta: { folkore: { action: "get_insight_summary", summary } },
+        content: [{ type: "text", text: narrative }],
+        _meta: { folkore: { action: "get_insight_summary", summary, narrative } },
+      };
+    },
+  );
+
+  // ── respond_to_parent ─────────────────────────────────────────────────────
+  registerAppTool(
+    server,
+    "respond_to_parent",
+    {
+      title: "Respond to Parent",
+      description: "Generate a warm, personalized Alexa response using the parent's memory graph. Alexa calls this when the parent asks about a person, place, or memory.",
+      inputSchema: z.object({
+        person_id: z.string().describe("Parent's unique ID"),
+        query:     z.string().describe("What the parent just said or asked, e.g. 'Who is Marcus?' or 'Tell me about the lake'"),
+      }),
+      _meta: { ui: { resourceUri: RESOURCE_URI } },
+    },
+    async (args): Promise<CallToolResult> => {
+      const memories = await getMemory(args.person_id, undefined, undefined, args.query);
+      const response = await generateAlexaResponse(args.query, memories);
+      return {
+        content: [{ type: "text", text: response }],
+        _meta: { folkore: { action: "respond_to_parent", response, memories_used: memories.map((m) => m.memory_id) } },
       };
     },
   );
