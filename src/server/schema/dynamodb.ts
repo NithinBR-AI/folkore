@@ -43,9 +43,11 @@ export const tables = {
     ],
     // Fields stored per item:
     // - type: "person" | "place" | "event" | "preference" | "story"
-    // - content: string          (the memory text)
-    // - entities: string[]       (extracted names, places, etc.)
-    // - added_by: string         (family member name or ID)
+    // - who: string              (person or subject of the memory)
+    // - what: string             (the memory content)
+    // - when: string             (freeform timeframe, e.g. "Summer 1985")
+    // - tags: string[]           (e.g. ["family", "fishing"])
+    // - added_by: string         (family member name)
     // - last_referenced: string  (ISO8601 — used by surface_morning_memory rotation)
     // - reference_count: number
     // - created_at: string
@@ -99,6 +101,52 @@ export const tables = {
     // - phone: string         (for SNS SMS)
     // - email: string         (for SNS email)
     // - notify_on: ("weekly_digest" | "confusion_alert" | "silence_alert")[]
+    // - created_at: string
+  },
+
+  /**
+   * memory_nodes
+   * Named entities in the parent's world — people, places, events.
+   * Nodes are the vertices of the memory graph.
+   */
+  memory_nodes: {
+    TableName: "folkore_memory_nodes",
+    BillingMode: "PAY_PER_REQUEST",
+    KeySchema: [
+      { AttributeName: "person_id", KeyType: "HASH" },
+      { AttributeName: "node_id",   KeyType: "RANGE" },
+    ],
+    AttributeDefinitions: [
+      { AttributeName: "person_id", AttributeType: "S" },
+      { AttributeName: "node_id",   AttributeType: "S" },
+    ],
+    // Fields stored per item:
+    // - type: "person" | "place" | "event"
+    // - name: string              (e.g. "Marcus", "Lake Tahoe")
+    // - attributes: object        (e.g. { age: 8, role: "grandson" })
+    // - created_at: string
+  },
+
+  /**
+   * memory_edges
+   * Typed relationships between nodes and/or memories.
+   * Edges are the connections that make the graph traversable.
+   */
+  memory_edges: {
+    TableName: "folkore_memory_edges",
+    BillingMode: "PAY_PER_REQUEST",
+    KeySchema: [
+      { AttributeName: "person_id", KeyType: "HASH" },
+      { AttributeName: "edge_id",   KeyType: "RANGE" },
+    ],
+    AttributeDefinitions: [
+      { AttributeName: "person_id", AttributeType: "S" },
+      { AttributeName: "edge_id",   AttributeType: "S" },
+    ],
+    // Fields stored per item:
+    // - from_id: string           (node_id or memory_id)
+    // - to_id: string             (node_id or memory_id)
+    // - relationship: string      (e.g. "grandson_of", "spouse_of", "attended", "lives_at", "loves")
     // - created_at: string
   },
 

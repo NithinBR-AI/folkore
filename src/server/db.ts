@@ -13,6 +13,7 @@ import {
 import {
   BedrockAgentClient,
   StartIngestionJobCommand,
+  ListIngestionJobsCommand,
 } from "@aws-sdk/client-bedrock-agent";
 import { randomUUID } from "node:crypto";
 
@@ -33,6 +34,8 @@ const TABLES = {
   memory_graph:      "folkore_memory_graph",
   conversation_log:  "folkore_conversation_log",
   family_contacts:   "folkore_family_contacts",
+  memory_nodes:      "folkore_memory_nodes",
+  memory_edges:      "folkore_memory_edges",
 } as const;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -60,6 +63,24 @@ export interface Interaction {
   memories_referenced: string[];
   initiated_by:        "parent" | "alexa";
   created_at:          string;
+}
+
+export interface MemoryNode {
+  person_id:   string;
+  node_id:     string;
+  type:        "person" | "place" | "event";
+  name:        string;
+  attributes:  Record<string, unknown>;
+  created_at:  string;
+}
+
+export interface MemoryEdge {
+  person_id:    string;
+  edge_id:      string;
+  from_id:      string;
+  to_id:        string;
+  relationship: string;
+  created_at:   string;
 }
 
 export interface InsightSummary {
@@ -107,12 +128,27 @@ export async function addMemory(
     Metadata: { person_id, memory_id: memory.memory_id, type },
   }));
 
-  // Fire-and-forget — don't block the curation response on KB indexing
+  // Trigger KB re-ingestion only if no job is already running.
+  // ConflictException on StartIngestionJob is swallowed — a concurrent job will
+  // pick up the new S3 file on its current incremental pass.
   if (KB_DATA_SOURCE_ID) {
-    bedrockAgent.send(new StartIngestionJobCommand({
+    bedrockAgent.send(new ListIngestionJobsCommand({
       knowledgeBaseId: KB_ID,
       dataSourceId: KB_DATA_SOURCE_ID,
-    })).catch((err) => console.error("KB ingestion trigger failed:", err));
+      filters: [{ attribute: "STATUS", operator: "EQ", values: ["STARTING", "IN_PROGRESS"] }],
+    })).then((jobs) => {
+      if ((jobs.ingestionJobSummaries ?? []).length === 0) {
+        return bedrockAgent.send(new StartIngestionJobCommand({
+          knowledgeBaseId: KB_ID,
+          dataSourceId: KB_DATA_SOURCE_ID,
+        }));
+      }
+    }).catch((err: unknown) => {
+      const code = (err as { name?: string }).name;
+      if (code !== "ConflictException") {
+        console.error("KB sync failed:", (err as Error).message);
+      }
+    });
   }
 
   return memory;
@@ -120,13 +156,31 @@ export async function addMemory(
 
 // ── get_memory ────────────────────────────────────────────────────────────────
 
+/**
+ * Hybrid memory retrieval — three-layer pipeline:
+ *
+ * 1. Graph traversal  — match named entities in query against memory_nodes,
+ *                       follow edges one hop to collect related memory_ids.
+ *                       Always instant; no async dependency.
+ *
+ * 2. DynamoDB keyword — fetch all memories for person_id, score each by
+ *                       keyword overlap between query and who/what/when/tags.
+ *                       Always fresh — catches memories added seconds ago.
+ *
+ * 3. KB semantic      — best-effort augmentation via Bedrock KB vector search.
+ *                       May lag by up to one sync cycle; failures are silently
+ *                       swallowed so KB outages never break retrieval.
+ *
+ * Results from all three layers are merged and deduplicated by memory_id.
+ * last_referenced and reference_count are updated for every surfaced memory.
+ */
 export async function getMemory(
   person_id: string,
   memory_id?: string,
   tag?: string,
   query?: string,
 ): Promise<Memory[]> {
-  // Exact lookup by ID
+  // ── Exact lookup by ID ────────────────────────────────────────────────────
   if (memory_id) {
     const result = await db.send(new GetCommand({
       TableName: TABLES.memory_graph,
@@ -135,56 +189,87 @@ export async function getMemory(
     return result.Item ? [result.Item as Memory] : [];
   }
 
-  // Semantic retrieval via Bedrock Knowledge Base
-  // KB does not propagate custom S3 metadata — filter by person_id post-retrieval via DynamoDB lookup.
-  // URI format: s3://folkore-memory-kb/memories/{person_id}/{memory_id}.txt
-  if (query) {
-    const kbResult = await bedrockAgentRuntime.send(new RetrieveCommand({
-      knowledgeBaseId: KB_ID,
-      retrievalQuery: { text: query },
-      retrievalConfiguration: {
-        vectorSearchConfiguration: { numberOfResults: 10 },
-      },
+  // ── Tag or full scan (no query) ───────────────────────────────────────────
+  if (!query) {
+    const result = await db.send(new QueryCommand({
+      TableName: TABLES.memory_graph,
+      KeyConditionExpression: "person_id = :pid",
+      ExpressionAttributeValues: { ":pid": person_id },
     }));
-
-    const memoryIds = (kbResult.retrievalResults ?? [])
-      .map((r) => {
-        const uri = r.location?.s3Location?.uri ?? "";
-        const match = uri.match(/\/memories\/([^/]+)\/([^/]+)\.txt$/);
-        if (!match || match[1] !== person_id) return null;
-        return match[2];
-      })
-      .filter((id): id is string => !!id);
-
-    const memories = await Promise.all(
-      memoryIds.map((id) =>
-        db.send(new GetCommand({ TableName: TABLES.memory_graph, Key: { person_id, memory_id: id } }))
-          .then((r) => r.Item as Memory | undefined)
-      )
-    );
-    const found = memories.filter((m): m is Memory => !!m);
-
-    // Update last_referenced for all surfaced memories
-    await Promise.all(found.map((m) =>
-      db.send(new PutCommand({
-        TableName: TABLES.memory_graph,
-        Item: { ...m, last_referenced: new Date().toISOString(), reference_count: m.reference_count + 1 },
-      }))
-    ));
-
-    return found;
+    const items = (result.Items ?? []) as Memory[];
+    if (tag) return items.filter((m) => m.tags.includes(tag));
+    return items;
   }
 
-  // Full scan filtered by tag or all
-  const result = await db.send(new QueryCommand({
+  // ── Hybrid query retrieval ────────────────────────────────────────────────
+
+  const lower = query.toLowerCase();
+  const collectedIds = new Set<string>();
+
+  // Layer 1: Graph traversal — find memory_ids reachable from named entities
+  const graphIds = await traverseGraph(person_id, query).catch(() => []);
+  graphIds.forEach((id) => collectedIds.add(id));
+
+  // Layer 2: DynamoDB keyword score — fetch all, score by field overlap
+  const allResult = await db.send(new QueryCommand({
     TableName: TABLES.memory_graph,
     KeyConditionExpression: "person_id = :pid",
     ExpressionAttributeValues: { ":pid": person_id },
   }));
+  const allMemories = (allResult.Items ?? []) as Memory[];
 
-  const items = (result.Items ?? []) as Memory[];
-  if (tag) return items.filter((m) => m.tags.includes(tag));
-  return items;
+  // Score each memory: count how many query words appear in who/what/when/tags
+  const scored = allMemories
+    .map((m) => {
+      const haystack = `${m.who} ${m.what} ${m.when} ${m.tags.join(" ")}`.toLowerCase();
+      const words = lower.split(/\s+/).filter((w) => w.length > 2);
+      const score = words.filter((w) => haystack.includes(w)).length;
+      return { m, score };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+    .map(({ m }) => m);
+
+  scored.forEach((m) => collectedIds.add(m.memory_id));
+
+  // Layer 3: KB semantic search — augment with vector similarity, best-effort
+  // KB may lag behind by up to one sync cycle; DynamoDB layers above always cover freshness.
+  // URI format: s3://folkore-memory-kb/memories/{person_id}/{memory_id}.txt
+  if (KB_ID) {
+    await bedrockAgentRuntime.send(new RetrieveCommand({
+      knowledgeBaseId: KB_ID,
+      retrievalQuery: { text: query },
+      retrievalConfiguration: { vectorSearchConfiguration: { numberOfResults: 10 } },
+    })).then((kbResult) => {
+      (kbResult.retrievalResults ?? []).forEach((r) => {
+        const uri = r.location?.s3Location?.uri ?? "";
+        const match = uri.match(/\/memories\/([^/]+)\/([^/]+)\.txt$/);
+        if (match && match[1] === person_id) collectedIds.add(match[2]);
+      });
+    }).catch(() => {
+      // KB failure is non-fatal — DynamoDB layers have already returned results
+    });
+  }
+
+  // Fetch full memory records for all collected IDs (deduplicated)
+  const fetched = await Promise.all(
+    [...collectedIds].map((id) =>
+      db.send(new GetCommand({ TableName: TABLES.memory_graph, Key: { person_id, memory_id: id } }))
+        .then((r) => r.Item as Memory | undefined)
+    )
+  );
+  const found = fetched.filter((m): m is Memory => !!m);
+
+  // Update last_referenced + reference_count for all surfaced memories
+  await Promise.all(found.map((m) =>
+    db.send(new PutCommand({
+      TableName: TABLES.memory_graph,
+      Item: { ...m, last_referenced: new Date().toISOString(), reference_count: m.reference_count + 1 },
+    }))
+  ));
+
+  return found;
 }
 
 // ── log_interaction ───────────────────────────────────────────────────────────
@@ -286,4 +371,82 @@ export async function surfaceMorningMemory(person_id: string): Promise<Memory | 
   }));
 
   return memory;
+}
+
+// ── add_node ──────────────────────────────────────────────────────────────────
+
+export async function addNode(
+  person_id: string,
+  type: MemoryNode["type"],
+  name: string,
+  attributes: Record<string, unknown> = {},
+): Promise<MemoryNode> {
+  const node: MemoryNode = {
+    person_id,
+    node_id:    randomUUID(),
+    type,
+    name,
+    attributes,
+    created_at: new Date().toISOString(),
+  };
+  await db.send(new PutCommand({ TableName: TABLES.memory_nodes, Item: node }));
+  return node;
+}
+
+// ── add_edge ──────────────────────────────────────────────────────────────────
+
+export async function addEdge(
+  person_id: string,
+  from_id: string,
+  to_id: string,
+  relationship: string,
+): Promise<MemoryEdge> {
+  const edge: MemoryEdge = {
+    person_id,
+    edge_id:      randomUUID(),
+    from_id,
+    to_id,
+    relationship,
+    created_at:   new Date().toISOString(),
+  };
+  await db.send(new PutCommand({ TableName: TABLES.memory_edges, Item: edge }));
+  return edge;
+}
+
+// ── traverse_graph ────────────────────────────────────────────────────────────
+// Given a query, find matching nodes by name, follow edges one hop,
+// and return all memory_ids reachable from those nodes.
+
+export async function traverseGraph(person_id: string, query: string): Promise<string[]> {
+  const lower = query.toLowerCase();
+
+  const nodesResult = await db.send(new QueryCommand({
+    TableName: TABLES.memory_nodes,
+    KeyConditionExpression: "person_id = :pid",
+    ExpressionAttributeValues: { ":pid": person_id },
+  }));
+  const nodes = (nodesResult.Items ?? []) as MemoryNode[];
+
+  const matchedNodeIds = nodes
+    .filter((n) => lower.includes(n.name.toLowerCase()))
+    .map((n) => n.node_id);
+
+  if (matchedNodeIds.length === 0) return [];
+
+  const edgesResult = await db.send(new QueryCommand({
+    TableName: TABLES.memory_edges,
+    KeyConditionExpression: "person_id = :pid",
+    ExpressionAttributeValues: { ":pid": person_id },
+  }));
+  const edges = (edgesResult.Items ?? []) as MemoryEdge[];
+
+  const memoryIds = new Set<string>();
+  for (const edge of edges) {
+    if (matchedNodeIds.includes(edge.from_id) || matchedNodeIds.includes(edge.to_id)) {
+      const other = matchedNodeIds.includes(edge.from_id) ? edge.to_id : edge.from_id;
+      memoryIds.add(other);
+    }
+  }
+
+  return [...memoryIds];
 }
