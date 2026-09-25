@@ -22,6 +22,16 @@ When the family checks in, the Insight Agent tells them how Frank's been doing: 
 
 ---
 
+## Proactive Morning Memory
+
+Each morning, EventBridge triggers `morning_memory` for each registered parent. The Supervisor routes system-initiated requests directly to `surfaceMorningMemory` — the least-recently-referenced memory in the graph — bypassing the classifier entirely.
+
+Alexa leads the conversation: *"Good morning Frank. Marcus has a dinosaur project at school this week. He's been working on it all month."*
+
+Family members receive a weekly digest via SNS with mood trends, confusion signals, and which memories have been surfaced.
+
+---
+
 ## Architecture
 
 ```
@@ -150,16 +160,6 @@ All integrations are live and called in code. See `src/server/db.ts` for DynamoD
 
 ---
 
-## Proactive Morning Memory
-
-Each morning, EventBridge triggers `morning_memory` for each registered parent. The Supervisor routes system-initiated requests directly to `surfaceMorningMemory` — the least-recently-referenced memory in the graph — bypassing the classifier entirely.
-
-Alexa leads the conversation: *"Good morning Frank. Marcus has a dinosaur project at school this week. He's been working on it all month."*
-
-Family members receive a weekly digest via SNS with mood trends, confusion signals, and which memories have been surfaced.
-
----
-
 ## Project Structure
 
 ```
@@ -183,7 +183,9 @@ folkore/
 │   │   ├── server.ts                    # MCP server — tool + resource registration
 │   │   └── main.ts                      # Entry point — HTTP + stdio transports
 │   └── client/
-│       └── mcp-app.tsx                  # React MCP App — Alexa+ voice UI simulation
+│       ├── mcp-app.tsx                  # Standalone React web UI — Frank's View + Family View
+│       ├── mcp-app.html                 # HTML entry point for Vite bundle
+│       └── global.css                   # Design system — Alexa dark palette, ring animations, bubbles
 ├── scripts/
 │   ├── smoke-test.ts                    # 13-step end-to-end test — db, agents, Frank's seed data
 │   └── seed-frank.ts                    # Demo seed — Frank Henderson persona, 24 memories, 6 weeks of natural curation
@@ -192,6 +194,22 @@ folkore/
 ├── tsconfig.server.json                 # Server (NodeNext)
 └── vite.config.ts                       # MCP App bundle config
 ```
+
+---
+
+## Demo
+
+The demo runs entirely from `http://localhost:3001/app` — no Alexa device, no Claude Desktop, no external dependencies beyond AWS. A judge can run it in two minutes.
+
+The story has four scenes.
+
+**Scene 0 — Morning.** Frank's View loads. Alexa proactively surfaces a memory: *"Good morning, Frank. Your grandson Marcus has a big dinosaur project at school this month."* Frank didn't ask. Alexa remembered.
+
+**Scene 1 — Family adds a memory.** Switch to Family → Add Memory. Type: *"Dad proposed to Dorothy at Lake Tahoe in 1971. They went back every anniversary for 30 years."* Folkore confirms it's stored. Switch back to Frank → ask Alexa about Dorothy. She knows.
+
+**Scene 2 — Frank forgets.** Frank types: *"I can't remember who Dorothy is."* The ring pulses amber. The confusion is logged and flagged. Alexa responds warmly from memory — not from a generic AI.
+
+**Scene 3 — Family checks in.** Family → Frank's Week. 48 memories. 30 conversations. 23% confusion rate. Mood bars show Frank is mostly calm and happy. The tags say he talks about family, fishing, Dorothy, teaching. Hit "How has dad been this week?" — Folkore tells the story.
 
 ---
 
@@ -250,7 +268,15 @@ npx tsx scripts/seed-frank.ts
 
 Use `person_id: frank-henderson-001` in all demo tool calls.
 
-### 5. Start the server
+### 5. Build the web UI
+
+```bash
+INPUT=mcp-app.html npx vite build
+```
+
+This bundles `src/client/mcp-app.tsx` into `dist/mcp-app.html` — a single self-contained HTML file served by the MCP server.
+
+### 6. Start the server
 
 ```bash
 npm run serve
@@ -258,13 +284,18 @@ npm run serve
 
 Server starts at `http://localhost:3001/mcp`.
 
+Open the demo UI at **`http://localhost:3001/app`** — no Alexa+ required. The UI has two views:
+
+- **Frank** — Alexa ring with morning memory trigger, conversation bubbles, confusion detection
+- **Family** — Add Memory (conversational curation) + Frank's Week (mood, confusion rate, insight narrative)
+
 For development with hot reload:
 
 ```bash
 npm run dev
 ```
 
-### 6. Run smoke test
+### 7. Run smoke test
 
 ```bash
 npx tsx scripts/smoke-test.ts
@@ -272,7 +303,7 @@ npx tsx scripts/smoke-test.ts
 
 13 steps: direct DB operations, memory graph, hybrid retrieval, all three agents, and live queries against Frank's seeded data. All steps should pass before connecting to Alexa+.
 
-### 7. Connect to Alexa+ (demo)
+### 8. Connect to Alexa+ (demo)
 
 Register the MCP server URL with Alexa+. The server exposes two tools:
 
@@ -310,6 +341,46 @@ Open `http://localhost:8080`, call `converse` with:
 | **English only** | Prompts and memory content are English. |
 | **HTTP-only inference** | All LLM calls go through Mantle. Direct `bedrock:InvokeModel` is out of scope. |
 | **KB as augmentation** | Bedrock KB indexing is asynchronous. DynamoDB keyword retrieval always covers freshness — the KB adds semantic distance on top, not instead. |
+
+---
+
+## Stability Features
+
+| Feature | Detail |
+|---|---|
+| **Guaranteed interaction logging** | `logInteraction` runs unconditionally in the server wrapper after every turn — not as an LLM tool call. Logging persists even if the agent errors, hits max iterations, or returns an empty response. |
+| **Deterministic confusion detection** | A regex classifier on the utterance flags confusion before the agent runs. The LLM never decides what counts as confusion — temporal signals, person misidentification, and place errors each map to a typed enum in the log. |
+| **KB sync guard** | Every `add_memory` call checks for an already-running ingestion job via `ListIngestionJobs` before firing `StartIngestionJob`. If a job is in progress, the file is already in S3 — the running job will pick it up. `ConflictException` is swallowed silently. DynamoDB keyword retrieval ensures the memory is immediately queryable regardless of KB sync state. |
+| **Three-layer retrieval fallback** | If the Bedrock KB call fails or times out, graph traversal and DynamoDB keyword scoring always run. No single retrieval layer is a hard dependency — degraded retrieval still returns results. |
+| **Agent loop cap** | Every agent is capped at 8 tool-use iterations per turn. A runaway LLM that keeps calling tools never hangs the request — it hits the cap, returns whatever it has, and logs. |
+| **Prompts as files, not strings** | System prompts live in `src/server/prompts/*.txt`. A prompt change is a file edit, not a code deploy. The LLM's behavior is version-controlled and auditable independently of the TypeScript codebase. |
+
+---
+
+## What's Next
+
+Folkore works end-to-end at demo scale. The memory pipeline is real — DynamoDB, S3, Bedrock KB, hybrid retrieval, agentic tool-use loops. What's left is taking it from one family to many.
+
+### Stage 2 — Richer Memory
+
+- **Multi-person households** — support multiple parents under one family account, each with their own memory graph and confusion tracking
+- **Voice-native curation** — family members add memories by talking to Alexa directly: "Alexa, remember that Dad proposed to Mom at Lake Tahoe in 1971." No web UI required.
+- **Photo memories** — when Amazon opens photo ingestion to third-party MCP tools, family sends a photo through the Alexa app; Folkore calls a vision model to extract names, faces, and context and stores it as a voice-retrievable memory Frank can ask about
+- **Memory aging** — surface recently added memories more often; rotate older ones back in on anniversaries or relevant dates
+
+### Stage 3 — Proactive Family Intelligence
+
+- **Real EventBridge trigger** — morning memory fires automatically every day per registered parent, no manual call
+- **Weekly SNS digest** — family receives a narrative email: how Frank's week went, which memories Alexa surfaced, confusion trends, what to add next
+- **Confusion escalation** — if confusion rate spikes above threshold in a 48-hour window, family is notified immediately, not on the weekly cycle
+- **Memory gap detection** — Insight Agent flags entities referenced in conversation that have no memory attached: *"Frank mentioned 'the Hendersons' twice this week — no memory exists for them"*
+
+### Stage 4 — Production & Privacy
+
+- **Multi-tenant isolation** — per-family DynamoDB partitions, per-family S3 prefixes, no cross-family data access
+- **HIPAA-aligned storage** — encryption at rest and in transit, audit log of every memory access, data retention controls per family preference
+- **Neptune migration** — replace DynamoDB graph tables with Amazon Neptune for native multi-hop traversal as memory graphs grow past 500 nodes
+- **Caregiver portal** — read-only view for professional caregivers: confusion trends, memory coverage, conversation summaries — no raw transcript, ever
 
 ---
 

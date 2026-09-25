@@ -5,12 +5,62 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import cors from "cors";
 import type { Request, Response } from "express";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServer } from "./server.js";
+import { runSupervisor } from "./agents/supervisor.js";
+import { getInsightSummary } from "./db.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 async function startHTTP(factory: () => McpServer): Promise<void> {
   const port = parseInt(process.env.PORT ?? "3001", 10);
   const app = createMcpExpressApp({ host: "0.0.0.0" });
   app.use(cors());
+
+  // ── Standalone web UI ────────────────────────────────────────────
+  app.get("/app", async (_req: Request, res: Response) => {
+    const appHtml = __filename.endsWith(".ts")
+      ? path.resolve(__dirname, "../../dist/mcp-app.html")
+      : path.resolve(__dirname, "mcp-app.html");
+    const html = await fs.readFile(appHtml, "utf-8");
+    res.setHeader("Content-Type", "text/html");
+    res.send(html);
+  });
+
+  // ── REST API for standalone web UI ──────────────────────────────
+  app.post("/api/converse", async (req: Request, res: Response) => {
+    try {
+      const { person_id, utterance, initiated_by, added_by } = req.body as {
+        person_id: string; utterance: string; initiated_by: string; added_by?: string;
+      };
+      const response = await runSupervisor({ personId: person_id, utterance, initiatedBy: initiated_by as "parent" | "family" | "system", addedBy: added_by });
+      res.json({ response });
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
+  app.post("/api/morning", async (req: Request, res: Response) => {
+    try {
+      const { person_id } = req.body as { person_id: string };
+      const response = await runSupervisor({ personId: person_id, utterance: "", initiatedBy: "system" });
+      res.json({ response });
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
+  app.get("/api/insight/:person_id", async (req: Request, res: Response) => {
+    try {
+      const summary = await getInsightSummary(String(req.params.person_id));
+      res.json(summary);
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
 
   app.all("/mcp", async (req: Request, res: Response) => {
     const server = factory();
