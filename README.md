@@ -295,7 +295,15 @@ For development with hot reload:
 npm run dev
 ```
 
-### 7. Run smoke test
+### 7. Run unit tests
+
+```bash
+npm test
+```
+
+65 tests, no AWS required. Covers confusion detection (temporal/person/place + 15 non-confusion phrases), the agentic tool-use loop (happy paths, error handling, max iterations), keyword scoring logic, InsightSummary math, and supervisor routing.
+
+### 9. Run smoke test
 
 ```bash
 npx tsx scripts/smoke-test.ts
@@ -303,7 +311,7 @@ npx tsx scripts/smoke-test.ts
 
 13 steps: direct DB operations, memory graph, hybrid retrieval, all three agents, and live queries against Frank's seeded data. All steps should pass before connecting to Alexa+.
 
-### 8. Connect to Alexa+ (demo)
+### 10. Connect to Alexa+ (demo)
 
 Register the MCP server URL with Alexa+. The server exposes two tools:
 

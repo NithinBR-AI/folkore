@@ -9,7 +9,7 @@ const SYSTEM_PROMPT = readFileSync(
   "utf-8",
 );
 
-function detectConfusion(utterance: string): {
+export function detectConfusion(utterance: string): {
   detected: boolean;
   type: "temporal" | "person" | "place" | null;
 } {
