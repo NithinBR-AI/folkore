@@ -16,6 +16,7 @@ import {
   ListIngestionJobsCommand,
 } from "@aws-sdk/client-bedrock-agent";
 import { randomUUID } from "node:crypto";
+import { scrubMemory } from "./guardrails/index.js";
 
 const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
 const bedrockAgentRuntime = new BedrockAgentRuntimeClient({ region: process.env.AWS_REGION ?? "us-east-1" });
@@ -102,14 +103,15 @@ export async function addMemory(
   added_by: string = "family",
   type: Memory["type"] = "story",
 ): Promise<Memory> {
+  const scrubbed = scrubMemory({ who, what, when, tags });
   const memory: Memory = {
     person_id,
     memory_id:       randomUUID(),
     type,
-    who,
-    what,
-    when,
-    tags,
+    who:             scrubbed.who,
+    what:            scrubbed.what,
+    when:            scrubbed.when,
+    tags:            scrubbed.tags,
     added_by,
     last_referenced: new Date(0).toISOString(),
     reference_count: 0,

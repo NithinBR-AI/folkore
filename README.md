@@ -172,6 +172,10 @@ folkore/
 │   │   │   ├── conversation.ts          # Parent-facing agent — memory retrieval + logging
 │   │   │   ├── curation.ts              # Family-facing agent — memory intake + graph extraction
 │   │   │   └── insight.ts               # Analytics agent — mood trends + weekly narrative
+│   │   ├── guardrails/
+│   │   │   ├── pii.ts                   # PII scrubbing — strips phone, email, SSN, card, ID from memory fields
+│   │   │   ├── rateLimit.ts             # Rate limiting — 20 req/min per IP, sliding window, 429 + Retry-After
+│   │   │   └── index.ts                 # Barrel export
 │   │   ├── prompts/
 │   │   │   ├── conversation.txt         # Conversation Agent system prompt
 │   │   │   ├── curation.txt             # Curation Agent system prompt
@@ -186,8 +190,10 @@ folkore/
 │       ├── mcp-app.tsx                  # Standalone React web UI — Frank's View + Family View
 │       ├── mcp-app.html                 # HTML entry point for Vite bundle
 │       └── global.css                   # Design system — Alexa dark palette, ring animations, bubbles
+├── tests/
+│   └── unit.test.ts                     # 91 unit tests — confusion detection, agent loop, PII scrubbing, rate limiting (no AWS required)
 ├── scripts/
-│   ├── smoke-test.ts                    # 13-step end-to-end test — db, agents, Frank's seed data
+│   ├── smoke-test.ts                    # 14-step end-to-end test — db, agents, Frank's seed data, PII guardrail verification
 │   └── seed-frank.ts                    # Demo seed — Frank Henderson persona, 24 memories, 6 weeks of natural curation
 ├── .env.sample                          # Required env vars template
 ├── tsconfig.json                        # Client (bundler)
@@ -362,6 +368,17 @@ Open `http://localhost:8080`, call `converse` with:
 | **Three-layer retrieval fallback** | If the Bedrock KB call fails or times out, graph traversal and DynamoDB keyword scoring always run. No single retrieval layer is a hard dependency — degraded retrieval still returns results. |
 | **Agent loop cap** | Every agent is capped at 8 tool-use iterations per turn. A runaway LLM that keeps calling tools never hangs the request — it hits the cap, returns whatever it has, and logs. |
 | **Prompts as files, not strings** | System prompts live in `src/server/prompts/*.txt`. A prompt change is a file edit, not a code deploy. The LLM's behavior is version-controlled and auditable independently of the TypeScript codebase. |
+
+---
+
+## Guardrails
+
+Defensive layers in `src/server/guardrails/` that run before data leaves the server.
+
+| Guardrail | Where | Detail |
+|---|---|---|
+| **PII scrubbing** | `db.ts` → `addMemory` | Phone numbers, email addresses, SSNs, card numbers, and passport/ID numbers are stripped from all memory fields (who, what, when, tags) before DynamoDB write and S3 upload. Families sometimes dictate contact details alongside memories — this ensures no sensitive identifiers persist in the memory store. |
+| **Rate limiting** | `main.ts` → `/api/converse` | 20 requests per IP per minute. Excess requests receive HTTP 429 with a `Retry-After` header. Prevents runaway LLM spend from a looping client or an accidental demo loop. |
 
 ---
 

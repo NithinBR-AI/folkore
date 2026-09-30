@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { createServer } from "./server.js";
 import { runSupervisor } from "./agents/supervisor.js";
 import { getInsightSummary } from "./db.js";
+import { rateLimitConverse } from "./guardrails/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,7 +32,7 @@ async function startHTTP(factory: () => McpServer): Promise<void> {
   });
 
   // ── REST API for standalone web UI ──────────────────────────────
-  app.post("/api/converse", async (req: Request, res: Response) => {
+  app.post("/api/converse", rateLimitConverse, async (req: Request, res: Response) => {
     try {
       const { person_id, utterance, initiated_by, added_by } = req.body as {
         person_id: string; utterance: string; initiated_by: string; added_by?: string;

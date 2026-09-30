@@ -106,6 +106,17 @@ async function run() {
     console.log(`   ✗ FAILED: ${(e as Error).message}\n`);
   }
 
+  // 14. PII guardrail — verify scrubbing fires before storage
+  console.log("14. PII guardrail — phone number scrubbed before storage...");
+  try {
+    const dirty = await addMemory(PERSON_ID, "daughter Sarah 555-123-4567", "Call her anytime", "always", ["family"], "family", "person");
+    const stored = await getMemory(PERSON_ID, dirty.memory_id);
+    const scrubbed = !stored[0]?.who.includes("555-123-4567");
+    console.log(`   ${scrubbed ? "✓" : "✗"} who field: "${stored[0]?.who}" (phone ${scrubbed ? "scrubbed" : "NOT scrubbed — FAIL"})\n`);
+  } catch (e) {
+    console.log(`   ✗ FAILED: ${(e as Error).message}\n`);
+  }
+
   console.log("=== Done ===\n");
 }
 

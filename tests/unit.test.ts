@@ -2,7 +2,7 @@
  * Unit tests — no AWS calls, no Mantle calls.
  * Run with: npx tsx --test tests/unit.test.ts
  */
-import { describe, it, mock, type Mock } from "node:test";
+import { describe, it, mock, beforeEach, type Mock } from "node:test";
 import assert from "node:assert/strict";
 
 type MockFetch = Mock<typeof fetch>;
@@ -488,3 +488,168 @@ describe("Supervisor — system initiatedBy skips LLM classification", () => {
       "system intent must not invoke LLM classifier");
   });
 });
+
+// ─── PII scrubbing ────────────────────────────────────────────────────────────
+
+const { scrubPii, scrubMemory } = await import("../src/server/guardrails/pii.js");
+
+describe("scrubPii — phone numbers", () => {
+  const cases = [
+    ["US no formatting: 5551234567",        "555-123-4567",       "[PHONE REDACTED]"],
+    ["US dashes: 555-123-4567",             "call 555-123-4567",  "call [PHONE REDACTED]"],
+    ["US dots: 555.123.4567",               "555.123.4567",       "[PHONE REDACTED]"],
+    ["US parens: (555) 123-4567",           "(555) 123-4567",     "[PHONE REDACTED]"],
+    ["US country code: +1 555-123-4567",    "+1 555-123-4567",    "[PHONE REDACTED]"],
+  ];
+  for (const [label, input, expected] of cases) {
+    it(label, () => assert.equal(scrubPii(input), expected));
+  }
+});
+
+describe("scrubPii — email addresses", () => {
+  const cases = [
+    ["simple email",           "contact sarah@example.com please", "contact [EMAIL REDACTED] please"],
+    ["email with subdomains",  "send to me@mail.company.org",      "send to [EMAIL REDACTED]"],
+    ["email with plus sign",   "sarah+folkore@gmail.com",          "[EMAIL REDACTED]"],
+  ];
+  for (const [label, input, expected] of cases) {
+    it(label, () => assert.equal(scrubPii(input), expected));
+  }
+});
+
+describe("scrubPii — SSN", () => {
+  const cases = [
+    ["SSN with dashes",  "SSN is 123-45-6789", "SSN is [SSN REDACTED]"],
+  ];
+  for (const [label, input, expected] of cases) {
+    it(label, () => assert.equal(scrubPii(input), expected));
+  }
+});
+
+describe("scrubPii — safe content passes through", () => {
+  const safe = [
+    "Frank loves fishing at Lake Tahoe",
+    "Marcus is 8 years old",
+    "Good morning Frank",
+    "Dorothy and Frank married in 1971",
+    "He has 3 grandchildren",
+    "Call me maybe",           // no real phone number
+    "The year was 1942",       // not SSN format
+  ];
+  for (const text of safe) {
+    it(`passes through: "${text}"`, () => assert.equal(scrubPii(text), text));
+  }
+});
+
+describe("scrubMemory", () => {
+  it("scrubs PII from who field", () => {
+    const result = scrubMemory({ who: "Sarah 555-123-4567", what: "Loves fishing", when: "July", tags: [] });
+    assert.equal(result.who, "Sarah [PHONE REDACTED]");
+  });
+
+  it("scrubs PII from what field", () => {
+    const result = scrubMemory({ who: "Frank", what: "Email is frank@example.com", when: "2026", tags: [] });
+    assert.equal(result.what, "Email is [EMAIL REDACTED]");
+  });
+
+  it("scrubs PII from tags", () => {
+    const result = scrubMemory({ who: "Frank", what: "fishing", when: "July", tags: ["family", "555-123-4567"] });
+    assert.equal(result.tags[1], "[PHONE REDACTED]");
+  });
+
+  it("does not mutate the original object", () => {
+    const original = { who: "Sarah 555-123-4567", what: "fishing", when: "July", tags: [] };
+    scrubMemory(original);
+    assert.equal(original.who, "Sarah 555-123-4567");
+  });
+
+  it("passes through clean memory unchanged", () => {
+    const mem = { who: "Frank", what: "loves fishing at Lake Tahoe", when: "every July", tags: ["fishing", "family"] };
+    const result = scrubMemory(mem);
+    assert.deepEqual(result, mem);
+  });
+});
+
+// ─── Rate limiter ─────────────────────────────────────────────────────────────
+
+const { rateLimitConverse, _resetRateLimitStore } = await import("../src/server/guardrails/rateLimit.js");
+
+function makeReq(ip = "1.2.3.4"): import("express").Request {
+  return { headers: {}, socket: { remoteAddress: ip } } as unknown as import("express").Request;
+}
+
+interface FakeRes {
+  statusCode: number;
+  body: object;
+  setHeader: ReturnType<typeof mock.fn>;
+  status: (n: number) => { json: (b: object) => void };
+}
+
+function makeRes(): FakeRes {
+  const res: FakeRes = {
+    statusCode: 0,
+    body: {},
+    setHeader: mock.fn(),
+    status(code: number) {
+      res.statusCode = code;
+      return { json: (b: object) => { res.body = b; } };
+    },
+  };
+  return res;
+}
+
+describe("rateLimitConverse", () => {
+  beforeEach(() => _resetRateLimitStore());  // clean slate for each test
+
+  it("allows first request through", () => {
+    const next = mock.fn();
+    rateLimitConverse(makeReq(), makeRes() as unknown as import("express").Response, next);
+    assert.equal(next.mock.calls.length, 1);
+  });
+
+  it("allows up to MAX_REQUESTS (20) from same IP", () => {
+    const req = makeReq("2.3.4.5");
+    for (let i = 0; i < 20; i++) {
+      const next = mock.fn();
+      rateLimitConverse(req, makeRes() as unknown as import("express").Response, next);
+      assert.equal(next.mock.calls.length, 1, `request ${i + 1} should pass`);
+    }
+  });
+
+  it("blocks the 21st request from same IP with 429", () => {
+    const req = makeReq("3.4.5.6");
+    const passNext = mock.fn();
+    for (let i = 0; i < 20; i++) {
+      rateLimitConverse(req, makeRes() as unknown as import("express").Response, passNext);
+    }
+    const res = makeRes();
+    const blockedNext = mock.fn();
+    rateLimitConverse(req, res as unknown as import("express").Response, blockedNext);
+    assert.equal(blockedNext.mock.calls.length, 0);
+    assert.equal(res.statusCode, 429);
+  });
+
+  it("allows different IPs independently", () => {
+    const next1 = mock.fn();
+    const next2 = mock.fn();
+    rateLimitConverse(makeReq("10.0.0.1"), makeRes() as unknown as import("express").Response, next1);
+    rateLimitConverse(makeReq("10.0.0.2"), makeRes() as unknown as import("express").Response, next2);
+    assert.equal(next1.mock.calls.length, 1);
+    assert.equal(next2.mock.calls.length, 1);
+  });
+
+  it("reads IP from x-forwarded-for header", () => {
+    const req = { headers: { "x-forwarded-for": "9.8.7.6, 1.1.1.1" }, socket: { remoteAddress: "127.0.0.1" } } as unknown as import("express").Request;
+    const next = mock.fn();
+    rateLimitConverse(req, makeRes() as unknown as import("express").Response, next);
+    assert.equal(next.mock.calls.length, 1);
+    // exhaust limit for the forwarded IP
+    for (let i = 1; i < 20; i++) {
+      rateLimitConverse(req, makeRes() as unknown as import("express").Response, mock.fn());
+    }
+    const blockedNext = mock.fn();
+    rateLimitConverse(req, makeRes() as unknown as import("express").Response, blockedNext);
+    assert.equal(blockedNext.mock.calls.length, 0);
+  });
+});
+
