@@ -9,7 +9,8 @@
     "serve": "tsx src/server/main.ts",
     "serve:stdio": "tsx src/server/main.ts --stdio",
     "start": "cross-env NODE_ENV=development npm run build && npm run serve",
-    "test": "npx tsx --test tests/unit.test.ts"
+    "test": "npx tsx --test tests/unit.test.ts",
+    "eval": "npx tsx evals/eval-runner.ts"
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-agent": "^3.967.0",

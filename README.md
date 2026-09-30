@@ -2,9 +2,13 @@
 
 **Dementia patients forget names, dates, and faces. The people who love them remember everything.**
 
-Folkore gives that knowledge to Alexa. Family members curate a living memory graph — stories, names, places, moments that matter. When a parent forgets their grandson's name, asks what year it is, or just needs grounding, Alexa answers from memory the family built — not from a generic AI.
+Folkore gives those memories to Alexa.
 
-Every morning, Alexa proactively surfaces a rotating memory. Every confusion signal is logged, tracked, and surfaced back to the family as a weekly insight. The more the family adds, the better Alexa gets at helping.
+A family builds a living memory graph — stories, names, places, moments that matter. When a parent forgets their grandson's name, asks what year it is, or just needs grounding, Alexa answers from memory the family built. Not from a general AI trained on the internet. Not from a database of medical facts. From the specific, personal things the people who love Frank chose to tell Folkore about Frank.
+
+That distinction is the whole point. A general AI can tell you who Marcus is as a name. Only Folkore can tell Frank that Marcus is *his* grandson — the eight-year-old who wants to be a palaeontologist, who Frank calls his little dinosaur guy, who visited last summer and told Frank he'd name a fossil after him.
+
+Every morning, before Frank says a word, Alexa proactively surfaces a memory. Every confusion signal is logged and surfaced back to the family as a weekly insight. The more the family adds, the better Alexa gets at helping.
 
 No app. No screen. No training required. Just voice, memory, and the people who matter.
 
@@ -156,7 +160,7 @@ Every part of Folkore's memory pipeline runs on AWS. There are no third-party da
 | **Amazon EventBridge** *(planned)* | — | Scheduled trigger for `morning_memory` — fires once per morning per registered parent. Calls the MCP server's `morning_memory` tool via HTTP. |
 | **Amazon SNS** *(planned)* | — | Weekly digest to family contacts — mood trends, confusion signals, surfaced memories. |
 
-All integrations are live and called in code. See `src/server/db.ts` for DynamoDB, S3, and Bedrock imports and usage.
+DynamoDB, S3, Bedrock KB, Bedrock Agent, and Mantle are all live and called in code. EventBridge and SNS are planned (Stage 3). See `src/server/db.ts` for DynamoDB, S3, and Bedrock imports and usage.
 
 ---
 
@@ -190,6 +194,14 @@ folkore/
 │       ├── mcp-app.tsx                  # Standalone React web UI — Frank's View + Family View
 │       ├── mcp-app.html                 # HTML entry point for Vite bundle
 │       └── global.css                   # Design system — Alexa dark palette, ring animations, bubbles
+├── evals/
+│   ├── eval-runner.ts                   # Runs all behavioral eval suites, prints pass/fail table
+│   └── suites/
+│       ├── tone.ts                      # Warm tone assertions — no robotic/clinical phrases
+│       ├── retrieval.ts                 # Memory retrieval correctness — Marcus, Tahoe, apple pie
+│       ├── confusion.ts                 # detectConfusion accuracy — true positives + false positive guard
+│       ├── hallucination.ts             # Response contains only grounded people/places from seed data
+│       └── curation.ts                  # Add memory → retrieve it back, PII scrub verified live
 ├── tests/
 │   └── unit.test.ts                     # 91 unit tests — confusion detection, agent loop, PII scrubbing, rate limiting (no AWS required)
 ├── scripts/
@@ -307,7 +319,15 @@ npm run dev
 npm test
 ```
 
-65 tests, no AWS required. Covers confusion detection (temporal/person/place + 15 non-confusion phrases), the agentic tool-use loop (happy paths, error handling, max iterations), keyword scoring logic, InsightSummary math, and supervisor routing.
+91 tests, no AWS required. Covers confusion detection (temporal/person/place + 15 non-confusion phrases), the agentic tool-use loop (happy paths, error handling, max iterations), keyword scoring logic, InsightSummary math, supervisor routing, PII scrubbing, and rate limiting.
+
+### 8. Run behavioral evals
+
+```bash
+npm run eval
+```
+
+Requires live AWS (Bedrock + DynamoDB). Runs 16 behavioral assertions against Frank Henderson's seeded data across 5 suites: tone, retrieval correctness, confusion detection, hallucination guard, and curation write/read verification.
 
 ### 9. Run smoke test
 
@@ -315,7 +335,7 @@ npm test
 npx tsx scripts/smoke-test.ts
 ```
 
-13 steps: direct DB operations, memory graph, hybrid retrieval, all three agents, and live queries against Frank's seeded data. All steps should pass before connecting to Alexa+.
+14 steps: direct DB operations, memory graph, hybrid retrieval, all three agents, PII guardrail verification, and live queries against Frank's seeded data. All steps should pass before connecting to Alexa+.
 
 ### 10. Connect to Alexa+ (demo)
 
