@@ -28,6 +28,13 @@ interface InsightData {
   top_tags: Record<string, number>;
 }
 
+interface DigestData {
+  to_name:  string;
+  to_email: string;
+  subject:  string;
+  body:     string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function uid() { return Math.random().toString(36).slice(2); }
@@ -91,7 +98,7 @@ function FrankView() {
   const [ring, setRing]           = useState<RingState>("idle");
   const [input, setInput]         = useState("");
   const [confusion, setConfusion] = useState(false);
-  const [booted, setBooted]       = useState(false);
+  const bootedRef                 = useRef(false);
   const bottomRef                 = useRef<HTMLDivElement>(null);
 
   const push = useCallback((b: Bubble) => setBubbles(p => [...p, b]), []);
@@ -100,10 +107,10 @@ function FrankView() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [bubbles]);
 
-  // Morning memory on first load
+  // Morning memory on first load — useRef survives StrictMode double-invoke
   useEffect(() => {
-    if (booted) return;
-    setBooted(true);
+    if (bootedRef.current) return;
+    bootedRef.current = true;
     doMorning();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -343,6 +350,8 @@ function InsightPanel() {
   const [loading, setLoading]     = useState(true);
   const [narrative, setNarrative] = useState("");
   const [loadingNarr, setLoadingNarr] = useState(false);
+  const [digest, setDigest]       = useState<DigestData | null>(null);
+  const [loadingDigest, setLoadingDigest] = useState(false);
 
   useEffect(() => {
     fetch(`${API}/api/insight/${FRANK_ID}`)
@@ -364,6 +373,17 @@ function InsightPanel() {
       setNarrative(d.response ?? "");
     } finally {
       setLoadingNarr(false);
+    }
+  }, []);
+
+  const previewDigest = useCallback(async () => {
+    setDigest(null);
+    setLoadingDigest(true);
+    try {
+      const r = await fetch(`${API}/api/digest/${FRANK_ID}`);
+      setDigest(await r.json() as DigestData);
+    } finally {
+      setLoadingDigest(false);
     }
   }, []);
 
@@ -438,6 +458,35 @@ function InsightPanel() {
         ) : (
           <button className="ask-btn" onClick={askInsight} disabled={loadingNarr}>
             {loadingNarr ? "Asking Folkore…" : "How has dad been this week?"}
+          </button>
+        )}
+      </div>
+
+      {/* Weekly digest */}
+      <div className="insight-section">
+        <h3 className="insight-title">Weekly digest</h3>
+        <p className="digest-sub">What Sarah gets in her inbox every Sunday</p>
+        {digest ? (
+          <div className="digest-card">
+            <div className="digest-header">
+              <div className="digest-meta-row">
+                <span className="digest-label">To</span>
+                <span className="digest-value">{digest.to_name} &lt;{digest.to_email}&gt;</span>
+              </div>
+              <div className="digest-meta-row">
+                <span className="digest-label">Subject</span>
+                <span className="digest-value digest-subject">{digest.subject}</span>
+              </div>
+            </div>
+            <pre className="digest-body">{digest.body}</pre>
+            <div className="digest-footer">
+              <span className="digest-badge">Manual trigger · SNS delivery in Stage 3</span>
+              <button className="digest-refresh" onClick={previewDigest}>Refresh</button>
+            </div>
+          </div>
+        ) : (
+          <button className="ask-btn" onClick={previewDigest} disabled={loadingDigest}>
+            {loadingDigest ? "Generating digest…" : "Preview weekly digest →"}
           </button>
         )}
       </div>

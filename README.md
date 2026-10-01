@@ -32,7 +32,7 @@ Each morning, EventBridge triggers `morning_memory` for each registered parent. 
 
 Alexa leads the conversation: *"Good morning Frank. Marcus has a dinosaur project at school this week. He's been working on it all month."*
 
-Family members receive a weekly digest via SNS with mood trends, confusion signals, and which memories have been surfaced.
+Family members can preview the weekly digest from the Family View — mood trends, confusion signals, and which memories have been surfaced, formatted as a ready-to-send email. Automated delivery via SNS is Stage 3.
 
 ---
 
@@ -160,7 +160,7 @@ Every part of Folkore's memory pipeline runs on AWS. There are no third-party da
 | **Amazon EventBridge** *(planned)* | — | Scheduled trigger for `morning_memory` — fires once per morning per registered parent. Calls the MCP server's `morning_memory` tool via HTTP. |
 | **Amazon SNS** *(planned)* | — | Weekly digest to family contacts — mood trends, confusion signals, surfaced memories. |
 
-DynamoDB, S3, Bedrock KB, Bedrock Agent, and Mantle are all live and called in code. EventBridge and SNS are planned (Stage 3). See `src/server/db.ts` for DynamoDB, S3, and Bedrock imports and usage.
+DynamoDB, S3, Bedrock KB, Bedrock Agent, and Mantle are all live and called in code. Weekly digest email generation is live — SNS delivery (Stage 3) will send it automatically. EventBridge scheduling is planned (Stage 3). See `src/server/db.ts` for DynamoDB, S3, and Bedrock imports and usage.
 
 ---
 
@@ -228,6 +228,8 @@ The story has four scenes.
 **Scene 2 — Frank forgets.** Frank types: *"I can't remember who Dorothy is."* The ring pulses amber. The confusion is logged and flagged. Alexa responds warmly from memory — not from a generic AI.
 
 **Scene 3 — Family checks in.** Family → Frank's Week. 48 memories. 30 conversations. 23% confusion rate. Mood bars show Frank is mostly calm and happy. The tags say he talks about family, fishing, Dorothy, teaching. Hit "How has dad been this week?" — Folkore tells the story.
+
+**Scene 3b — Weekly digest.** Scroll to "Weekly digest" → click "Preview weekly digest." A formatted email renders inline — To: Sarah Henderson, subject, mood summary, confusion note, one actionable suggestion. This fires manually in the demo; in Stage 3 it lands in Sarah's inbox automatically every Sunday via SNS.
 
 ---
 
@@ -416,7 +418,7 @@ Folkore works end-to-end at demo scale. The memory pipeline is real — DynamoDB
 ### Stage 3 — Proactive Family Intelligence
 
 - **Real EventBridge trigger** — morning memory fires automatically every day per registered parent, no manual call
-- **Weekly SNS digest** — family receives a narrative email: how Frank's week went, which memories Alexa surfaced, confusion trends, what to add next
+- **Automated SNS digest** — weekly digest email generation is already live; Stage 3 wires it to SNS so it fires automatically every Sunday per registered family without manual trigger
 - **Confusion escalation** — if confusion rate spikes above threshold in a 48-hour window, family is notified immediately, not on the weekly cycle
 - **Memory gap detection** — Insight Agent flags entities referenced in conversation that have no memory attached: *"Frank mentioned 'the Hendersons' twice this week — no memory exists for them"*
 

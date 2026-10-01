@@ -264,12 +264,41 @@ async function seed() {
   }
   console.log(`   ✓ ${logs.length} log entries\n`);
 
+  // ── Family contacts — Sarah receives the weekly digest ───────────────────────
+  console.log("Seeding family contacts...");
+  await dynamo.send(new PutCommand({
+    TableName: "folkore_family_contacts",
+    Item: {
+      person_id:      PERSON_ID,
+      contact_id:     randomUUID(),
+      name:           "Sarah Henderson",
+      email:          "sarah.henderson@example.com",
+      relationship:   "daughter",
+      weekly_digest:  true,
+      created_at:     ago(42),
+    },
+  }));
+  await dynamo.send(new PutCommand({
+    TableName: "folkore_family_contacts",
+    Item: {
+      person_id:      PERSON_ID,
+      contact_id:     randomUUID(),
+      name:           "Robert Henderson",
+      email:          "robert.henderson@example.com",
+      relationship:   "son",
+      weekly_digest:  false,
+      created_at:     ago(42),
+    },
+  }));
+  console.log("   ✓ 2 contacts\n");
+
   console.log("=== Seed complete ===");
   console.log(`   person_id  : ${PERSON_ID}`);
   console.log(`   Memories   : 24`);
   console.log(`   Nodes      : 8`);
   console.log(`   Edges      : 20`);
   console.log(`   Log entries: ${logs.length}`);
+  console.log(`   Contacts   : 2 (Sarah weekly digest, Robert opted out)`);
   console.log(`\n   Demo person_id: ${PERSON_ID}\n`);
 }
 

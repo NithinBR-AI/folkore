@@ -343,6 +343,73 @@ export async function getInsightSummary(person_id: string): Promise<InsightSumma
   };
 }
 
+// ── generate_weekly_digest ────────────────────────────────────────────────────
+
+export interface WeeklyDigest {
+  to_name:  string;
+  to_email: string;
+  subject:  string;
+  body:     string;
+}
+
+export async function generateWeeklyDigest(person_id: string): Promise<WeeklyDigest> {
+  const [summary, contactResult] = await Promise.all([
+    getInsightSummary(person_id),
+    db.send(new QueryCommand({
+      TableName: TABLES.family_contacts,
+      KeyConditionExpression: "person_id = :pid",
+      ExpressionAttributeValues: { ":pid": person_id },
+    })),
+  ]);
+
+  const contacts = (contactResult.Items ?? []) as Array<{
+    name: string; email: string; relationship: string; weekly_digest: boolean;
+  }>;
+  const primary = contacts.find(c => c.weekly_digest) ?? { name: "Family", email: "family@example.com", relationship: "family" };
+
+  // Mood narrative
+  const topMood = Object.entries(summary.mood_counts).sort((a, b) => b[1] - a[1])[0];
+  const moodLine = topMood
+    ? `He's been mostly ${topMood[0]} this week across ${summary.total_interactions} conversations.`
+    : `We recorded ${summary.total_interactions} conversations this week.`;
+
+  // Top topics
+  const topTags = Object.entries(summary.top_tags).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([t]) => t);
+  const topicsLine = topTags.length > 0
+    ? `He keeps coming back to: ${topTags.join(", ")}.`
+    : "";
+
+  // Confusion line
+  const confusionLine = summary.confusion_rate > 0
+    ? `One thing worth noting: his confusion rate this week was ${summary.confusion_rate}% — ${summary.confusion_rate > 30 ? "worth a check-in call." : "within normal range."}`
+    : "No confusion signals this week — a good sign.";
+
+  const body = [
+    `Hi ${primary.name},`,
+    "",
+    `Here's Frank's weekly update from Folkore.`,
+    "",
+    moodLine,
+    topicsLine,
+    "",
+    confusionLine,
+    "",
+    `Frank has ${summary.total_memories} memories in his companion. The more your family adds, the better Folkore can help him.`,
+    "",
+    "— Folkore",
+    "",
+    "---",
+    "This digest is generated automatically. SNS delivery coming in Stage 3.",
+  ].filter(l => l !== undefined).join("\n");
+
+  return {
+    to_name:  primary.name,
+    to_email: primary.email,
+    subject:  `Frank's weekly update — ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric" })}`,
+    body,
+  };
+}
+
 // ── surface_morning_memory ────────────────────────────────────────────────────
 
 export async function surfaceMorningMemory(person_id: string): Promise<Memory | null> {

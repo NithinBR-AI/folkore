@@ -10,7 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "./server.js";
 import { runSupervisor } from "./agents/supervisor.js";
-import { getInsightSummary } from "./db.js";
+import { getInsightSummary, generateWeeklyDigest } from "./db.js";
 import { rateLimitConverse } from "./guardrails/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -58,6 +58,15 @@ async function startHTTP(factory: () => McpServer): Promise<void> {
     try {
       const summary = await getInsightSummary(String(req.params.person_id));
       res.json(summary);
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
+  app.get("/api/digest/:person_id", async (req: Request, res: Response) => {
+    try {
+      const digest = await generateWeeklyDigest(String(req.params.person_id));
+      res.json(digest);
     } catch (e) {
       res.status(500).json({ error: (e as Error).message });
     }
