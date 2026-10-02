@@ -95,14 +95,21 @@ async function callLLM(messages: OAIMessage[], tools: ToolDefinition[]): Promise
   return json.choices[0].message;
 }
 
+export interface HistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export async function runAgentLoop(
   userMessage: string,
   config: AgentConfig,
+  history: HistoryMessage[] = [],
 ): Promise<string> {
   const { systemPrompt, tools, executors, maxIterations = 8 } = config;
 
   const messages: OAIMessage[] = [
     { role: "system", content: systemPrompt },
+    ...history.slice(-10).map(h => ({ role: h.role, content: h.content })),
     { role: "user",   content: userMessage },
   ];
 

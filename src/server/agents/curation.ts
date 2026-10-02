@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { runAgentLoop, type AgentConfig } from "./loop.js";
+import { runAgentLoop, type AgentConfig, type HistoryMessage } from "./loop.js";
 import { addMemory, addNode, addEdge } from "../db.js";
 
 const PROMPTS_DIR = process.env.LAMBDA_TASK_ROOT
@@ -81,9 +81,10 @@ const config: AgentConfig = {
   },
 };
 
-export async function runCurationAgent(personId: string, familyInput: string, addedBy: string): Promise<string> {
+export async function runCurationAgent(personId: string, familyInput: string, addedBy: string, history: HistoryMessage[] = []): Promise<string> {
   return runAgentLoop(
     `person_id: ${personId}\nadded_by: ${addedBy}\n\nFamily member says: "${familyInput}"`,
     config,
+    history,
   );
 }

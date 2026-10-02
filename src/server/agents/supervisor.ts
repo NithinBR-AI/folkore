@@ -5,7 +5,7 @@ import { runConversationAgent } from "./conversation.js";
 import { runCurationAgent }     from "./curation.js";
 import { runInsightAgent }      from "./insight.js";
 import { surfaceMorningMemory } from "../db.js";
-import { runAgentLoop, type AgentConfig } from "./loop.js";
+import { runAgentLoop, type AgentConfig, type HistoryMessage } from "./loop.js";
 
 type Intent = "parent" | "family" | "insight" | "morning";
 
@@ -33,10 +33,11 @@ export interface SupervisorRequest {
   utterance:   string;
   initiatedBy: "parent" | "family" | "system";
   addedBy?:    string;
+  history?:    HistoryMessage[];
 }
 
 export async function runSupervisor(req: SupervisorRequest): Promise<string> {
-  const { personId, utterance, initiatedBy, addedBy } = req;
+  const { personId, utterance, initiatedBy, addedBy, history = [] } = req;
 
   if (initiatedBy === "system") {
     const memory = await surfaceMorningMemory(personId);
@@ -50,7 +51,7 @@ export async function runSupervisor(req: SupervisorRequest): Promise<string> {
 
   switch (intent) {
     case "family":
-      return runCurationAgent(personId, utterance, addedBy ?? "family");
+      return runCurationAgent(personId, utterance, addedBy ?? "family", history);
     case "insight":
       return runInsightAgent(personId);
     case "morning": {

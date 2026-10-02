@@ -34,10 +34,11 @@ async function startHTTP(factory: () => McpServer): Promise<void> {
   // ── REST API for standalone web UI ──────────────────────────────
   app.post("/api/converse", rateLimitConverse, async (req: Request, res: Response) => {
     try {
-      const { person_id, utterance, initiated_by, added_by } = req.body as {
+      const { person_id, utterance, initiated_by, added_by, history } = req.body as {
         person_id: string; utterance: string; initiated_by: string; added_by?: string;
+        history?: Array<{ role: "user" | "assistant"; content: string }>;
       };
-      const response = await runSupervisor({ personId: person_id, utterance, initiatedBy: initiated_by as "parent" | "family" | "system", addedBy: added_by });
+      const response = await runSupervisor({ personId: person_id, utterance, initiatedBy: initiated_by as "parent" | "family" | "system", addedBy: added_by, history });
       res.json({ response });
     } catch (e) {
       res.status(500).json({ error: (e as Error).message });

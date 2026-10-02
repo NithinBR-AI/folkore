@@ -263,13 +263,18 @@ function FamilyView() {
 
 // ─── Curate Panel ─────────────────────────────────────────────────────────────
 
+// Detect when the curation agent confirms a memory was saved
+const SAVED_PATTERN = /stored|saved|added|remembered|got it|noted|I('ve| have) (added|saved|stored|noted)/i;
+
 function CuratePanel() {
   const [bubbles, setBubbles] = useState<Bubble[]>([
     bubble("alexa", "Hi Sarah. Tell me something about Frank — a memory, a name, a place he loves. I'll keep it safe for him."),
   ]);
   const [input, setInput] = useState("");
   const [busy, setBusy]   = useState(false);
-  const bottomRef         = useRef<HTMLDivElement>(null);
+  // Conversation history for the current memory-adding session (capped at 10 messages)
+  const historyRef = useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
+  const bottomRef  = useRef<HTMLDivElement>(null);
 
   const push = useCallback((b: Bubble) => setBubbles(p => [...p, b]), []);
 
@@ -288,8 +293,22 @@ function CuratePanel() {
         utterance: text.trim(),
         initiated_by: "family",
         added_by: "daughter Sarah",
+        history: historyRef.current,
       });
-      push(bubble("alexa", data.response ?? "Got it, I'll remember that for Frank."));
+      const reply = data.response ?? "Got it, I'll remember that for Frank.";
+      push(bubble("alexa", reply));
+
+      // Append this turn to history
+      historyRef.current = [
+        ...historyRef.current,
+        { role: "user", content: text.trim() },
+        { role: "assistant", content: reply },
+      ].slice(-10); // keep last 10 messages (5 turns)
+
+      // Reset history once the agent confirms the memory is saved
+      if (SAVED_PATTERN.test(reply)) {
+        historyRef.current = [];
+      }
     } catch {
       push(bubble("alexa", "Something went wrong. Please try again."));
     } finally {
