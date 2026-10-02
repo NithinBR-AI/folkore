@@ -50,9 +50,9 @@ const agentConfig: AgentConfig = {
   },
 };
 
-export async function runConversationAgent(personId: string, utterance: string): Promise<string> {
+export async function runConversationAgent(personId: string, utterance: string, history: import("./loop.js").HistoryMessage[] = []): Promise<string> {
   const [response, confusion] = await Promise.all([
-    runAgentLoop(`person_id: ${personId}\n\nParent said: "${utterance}"`, agentConfig),
+    runAgentLoop(`person_id: ${personId}\n\nParent said: "${utterance}"`, agentConfig, history),
     Promise.resolve(detectConfusion(utterance)),
   ]);
 

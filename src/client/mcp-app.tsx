@@ -7,7 +7,8 @@ import "./global.css";
 const API = typeof window !== "undefined" && window.location.hostname !== "localhost"
   ? ""  // relative paths in production (Lambda)
   : "http://localhost:3001";
-const FRANK_ID = "frank-henderson-001";
+const FRANK_ID   = "frank-henderson-001";
+const FRANK_NAME = "Frank";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -102,6 +103,7 @@ function FrankView() {
   const [confusion, setConfusion] = useState(false);
   const bootedRef                 = useRef(false);
   const bottomRef                 = useRef<HTMLDivElement>(null);
+  const historyRef                = useRef<Array<{ role: "user" | "assistant"; content: string }>>([]);
 
   const push = useCallback((b: Bubble) => setBubbles(p => [...p, b]), []);
 
@@ -109,11 +111,13 @@ function FrankView() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [bubbles]);
 
-  // Morning memory on first load — useRef survives StrictMode double-invoke
+  // Static greeting on load
   useEffect(() => {
     if (bootedRef.current) return;
     bootedRef.current = true;
-    doMorning();
+    const hour = new Date().getHours();
+    const greet = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+    push(bubble("alexa", `${greet}, ${FRANK_NAME}. What's on your mind?`));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -149,9 +153,16 @@ function FrankView() {
         person_id: FRANK_ID,
         utterance: text.trim(),
         initiated_by: "parent",
+        history: historyRef.current,
       });
       if (isConfusion) setConfusion(true);
-      push(bubble("alexa", data.response ?? "I'm here with you, Frank.", isConfusion));
+      const reply = data.response ?? "I'm here with you, Frank.";
+      push(bubble("alexa", reply, isConfusion));
+      historyRef.current = [
+        ...historyRef.current,
+        { role: "user", content: text.trim() },
+        { role: "assistant", content: reply },
+      ].slice(-10);
     } catch {
       push(bubble("alexa", "I'm sorry, I didn't catch that. Can you say it again?"));
     } finally {

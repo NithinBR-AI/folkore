@@ -41,8 +41,11 @@ export async function runSupervisor(req: SupervisorRequest): Promise<string> {
 
   if (initiatedBy === "system") {
     const memory = await surfaceMorningMemory(personId);
-    if (!memory) return "No memories stored yet for this parent.";
-    return `Good morning! ${memory.what} — ${memory.when}.`;
+    if (!memory) return "Good morning! It's a lovely day. How are you feeling?";
+    return runConversationAgent(
+      personId,
+      `[MORNING GREETING] Start with "Good morning!" then weave in this memory warmly and naturally in 1–2 sentences — do not recite it as a fact, do not include dates or year ranges: ${memory.what}`,
+    );
   }
 
   const intent = await classifyIntent(
@@ -56,10 +59,14 @@ export async function runSupervisor(req: SupervisorRequest): Promise<string> {
       return runInsightAgent(personId);
     case "morning": {
       const memory = await surfaceMorningMemory(personId);
-      return memory ? `Good morning! ${memory.what} — ${memory.when}.` : "No memories yet.";
+      if (!memory) return "Good morning! It's a lovely day. How are you feeling?";
+      return runConversationAgent(
+        personId,
+        `[MORNING GREETING] Start with "Good morning!" then weave in this memory warmly and naturally in 1–2 sentences — do not recite it as a fact, do not include dates or year ranges: ${memory.what}`,
+      );
     }
     case "parent":
     default:
-      return runConversationAgent(personId, utterance);
+      return runConversationAgent(personId, utterance, history);
   }
 }
