@@ -352,7 +352,7 @@ Register the MCP server URL with Alexa+. The server exposes two tools:
 
 The server is already deployed. Use this URL directly — no upload or local server required:
 
-**MCP endpoint:**
+**MCP endpoint** *(for Alexa+ registration — not a browser URL)*:
 ```
 https://554o3nyrbvjah7wjqgkaw74xsa0dtxjp.lambda-url.us-east-1.on.aws/mcp
 ```
