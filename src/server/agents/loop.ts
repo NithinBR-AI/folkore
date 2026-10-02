@@ -1,6 +1,25 @@
 // Mantle uses an AWS-internal certificate not in Node's bundled store.
-// Safe for internal AWS endpoints — never set this for public internet calls.
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
+
+const SECRETS_CLIENT = new SecretsManagerClient({ region: process.env.AWS_REGION ?? "us-east-1" });
+const MANTLE_SECRET_ARN = "arn:aws:secretsmanager:us-east-1:156187162502:secret:folkore/mantle-api-key-1eCRwf";
+
+async function getMantleApiKey(): Promise<string> {
+  // Local dev — use env var directly
+  if (process.env.MANTLE_API_KEY) return process.env.MANTLE_API_KEY;
+  const res = await SECRETS_CLIENT.send(new GetSecretValueCommand({ SecretId: MANTLE_SECRET_ARN }));
+  const secret = JSON.parse(res.SecretString ?? "{}") as Record<string, string>;
+  return secret.MANTLE_API_KEY ?? "";
+}
+
+// Cached at module level — fetched once per Lambda cold start
+let _mantleApiKey: string | null = null;
+async function getApiKey(): Promise<string> {
+  if (!_mantleApiKey) _mantleApiKey = await getMantleApiKey();
+  return _mantleApiKey;
+}
 
 /**
  * Core agentic tool-use loop — Mantle (OpenAI-compatible) + tool execution.
@@ -37,9 +56,9 @@ interface OAIMessage {
 
 const MANTLE_BASE_URL = process.env.MANTLE_BASE_URL ?? "https://bedrock-mantle.us-east-1.api.aws/v1";
 const MANTLE_MODEL    = process.env.MANTLE_MODEL    ?? "deepseek.v3.2";
-const MANTLE_API_KEY  = process.env.MANTLE_API_KEY  ?? "";
 
 async function callLLM(messages: OAIMessage[], tools: ToolDefinition[]): Promise<OAIMessage> {
+  const apiKey = await getApiKey();
   const body: Record<string, unknown> = {
     model: MANTLE_MODEL,
     messages,
@@ -58,7 +77,7 @@ async function callLLM(messages: OAIMessage[], tools: ToolDefinition[]): Promise
     method: "POST",
     headers: {
       "Content-Type":   "application/json",
-      "Authorization":  `Bearer ${MANTLE_API_KEY}`,
+      "Authorization":  `Bearer ${apiKey}`,
       "openai-project": "default",
     },
     body: JSON.stringify(body),

@@ -217,7 +217,7 @@ folkore/
 
 ## Demo
 
-The demo runs entirely from `http://localhost:3001/app` — no Alexa device, no Claude Desktop, no external dependencies beyond AWS. A judge can run it in two minutes.
+The demo runs at **`https://554o3nyrbvjah7wjqgkaw74xsa0dtxjp.lambda-url.us-east-1.on.aws/app`** (live, no setup required) or locally at `http://localhost:3001/app`. A judge can open the live URL immediately — no Alexa device, no Claude Desktop, no local dependencies.
 
 The story has four scenes.
 
@@ -259,16 +259,18 @@ cp .env.sample .env
 
 Open `.env` and fill in every value:
 
-| Variable | Where to get it |
-|---|---|
-| `AWS_REGION` | Your AWS region, e.g. `us-east-1` |
-| `AWS_PROFILE` | Named profile from `~/.aws/credentials`, or remove this line if using default |
-| `FOLKORE_KB_ID` | Bedrock console → Knowledge Bases → your KB → Knowledge base ID |
-| `FOLKORE_KB_DATA_SOURCE_ID` | `aws bedrock-agent list-data-sources --knowledge-base-id <your-kb-id>` |
-| `FOLKORE_KB_BUCKET` | S3 bucket name you configured as the KB data source |
-| `MANTLE_API_KEY` | Your Mantle gateway API key |
-| `MANTLE_BASE_URL` | `https://bedrock-mantle.us-east-1.api.aws/v1` |
-| `MANTLE_MODEL` | `deepseek.v3.2` |
+| Variable | Where to get it | Lambda? |
+|---|---|---|
+| `AWS_REGION` | Your AWS region, e.g. `us-east-1` | Auto-set by runtime — skip |
+| `AWS_PROFILE` | Named profile from `~/.aws/credentials` | Not needed — Lambda uses execution role |
+| `FOLKORE_KB_ID` | Bedrock console → Knowledge Bases → your KB → Knowledge base ID | ✓ |
+| `FOLKORE_KB_DATA_SOURCE_ID` | `aws bedrock-agent list-data-sources --knowledge-base-id <your-kb-id>` | ✓ |
+| `FOLKORE_KB_BUCKET` | S3 bucket name you configured as the KB data source | ✓ |
+| `MANTLE_API_KEY` | Your Mantle gateway API key | ✓ |
+| `MANTLE_BASE_URL` | `https://bedrock-mantle.us-east-1.api.aws/v1` | ✓ |
+| `MANTLE_MODEL` | `deepseek.v3.2` | ✓ |
+
+> **Note:** `NODE_TLS_REJECT_UNAUTHORIZED` is set programmatically in `loop.ts` for Mantle's internal AWS certificate — do not add it to `.env` or Lambda env vars.
 
 ### 3. Provision AWS resources
 
@@ -345,6 +347,26 @@ Register the MCP server URL with Alexa+. The server exposes two tools:
 
 - `converse` — used for every parent and family utterance
 - `morning_memory` — triggered by EventBridge each morning (can be called manually for demo)
+
+### 11. Live MCP endpoint
+
+The server is already deployed. Use this URL directly — no upload or local server required:
+
+**MCP endpoint:**
+```
+https://554o3nyrbvjah7wjqgkaw74xsa0dtxjp.lambda-url.us-east-1.on.aws/mcp
+```
+
+**Web UI:**
+```
+https://554o3nyrbvjah7wjqgkaw74xsa0dtxjp.lambda-url.us-east-1.on.aws/app
+```
+
+Register the MCP endpoint URL with Alexa+ as the MCP server endpoint.
+
+> For self-hosting, run `node build-lambda.mjs` to produce `folkore-lambda.zip`, upload it to your own Lambda function, and configure the environment variables listed in step 2.
+
+---
 
 ### Test locally with MCP Inspector
 

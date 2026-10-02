@@ -9,10 +9,10 @@ import { runAgentLoop, type AgentConfig } from "./loop.js";
 
 type Intent = "parent" | "family" | "insight" | "morning";
 
-const CLASSIFY_PROMPT = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "../prompts/supervisor-classify.txt"),
-  "utf-8",
-);
+const PROMPTS_DIR = process.env.LAMBDA_TASK_ROOT
+  ? join(process.env.LAMBDA_TASK_ROOT, "prompts")
+  : join(dirname(fileURLToPath(import.meta.url)), "../prompts");
+const CLASSIFY_PROMPT = readFileSync(join(PROMPTS_DIR, "supervisor-classify.txt"), "utf-8");
 
 const classifyConfig: AgentConfig = {
   systemPrompt: CLASSIFY_PROMPT,

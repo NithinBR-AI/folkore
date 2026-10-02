@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 import { runAgentLoop, type AgentConfig } from "./loop.js";
 import { addMemory, addNode, addEdge } from "../db.js";
 
-const SYSTEM_PROMPT = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "../prompts/curation.txt"),
-  "utf-8",
-);
+const PROMPTS_DIR = process.env.LAMBDA_TASK_ROOT
+  ? join(process.env.LAMBDA_TASK_ROOT, "prompts")
+  : join(dirname(fileURLToPath(import.meta.url)), "../prompts");
+const SYSTEM_PROMPT = readFileSync(join(PROMPTS_DIR, "curation.txt"), "utf-8");
 
 const config: AgentConfig = {
   systemPrompt: SYSTEM_PROMPT,

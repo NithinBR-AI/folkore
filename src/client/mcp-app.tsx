@@ -4,7 +4,9 @@ import "./global.css";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const API = "http://localhost:3001";
+const API = typeof window !== "undefined" && window.location.hostname !== "localhost"
+  ? ""  // relative paths in production (Lambda)
+  : "http://localhost:3001";
 const FRANK_ID = "frank-henderson-001";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
