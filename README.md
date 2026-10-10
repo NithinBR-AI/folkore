@@ -8,9 +8,9 @@ A family builds a living memory graph — stories, names, places, moments that m
 
 That distinction is the whole point. A general AI can tell you who Marcus is as a name. Only Folkore can tell Frank that Marcus is *his* grandson — the eight-year-old who wants to be a palaeontologist, who Frank calls his little dinosaur guy, who visited last summer and told Frank he'd name a fossil after him.
 
-Every morning, before Frank says a word, Alexa proactively surfaces a memory. Every confusion signal is logged and surfaced back to the family as a weekly insight. The more the family adds, the better Alexa gets at helping.
+Every morning, Frank can ask Alexa for a memory — and Folkore surfaces one from his personal graph. Every confusion signal is logged and surfaced back to the family as a weekly insight. The more the family adds, the better Alexa gets at helping.
 
-No app. No screen. No training required. Just voice, memory, and the people who matter.
+No app. No screen for Frank. The family uses a web UI once to set up memories — after that, Frank's entire experience is voice. No training required. Just voice, memory, and the people who matter.
 
 Built for the **Build, Ship, Shape: Amazon Developer Hackathon 2026** — Alexa+ track.
 
@@ -28,7 +28,7 @@ When the family checks in, the Insight Agent tells them how Frank's been doing: 
 
 ## Proactive Morning Memory
 
-Each morning, EventBridge triggers `morning_memory` for each registered parent. The Supervisor routes system-initiated requests directly to `surfaceMorningMemory` — the least-recently-referenced memory in the graph — bypassing the classifier entirely.
+Each morning, Frank can ask Alexa for a memory and Folkore surfaces one — the least-recently-referenced memory in the graph. The Supervisor routes system-initiated requests directly to `surfaceMorningMemory`, bypassing the classifier entirely. Automatic daily triggering via EventBridge is Stage 3; the current demo uses a manual trigger, the same approach taken with the weekly digest.
 
 Alexa leads the conversation: *"Good morning Frank. Marcus has a dinosaur project at school this week. He's been working on it all month."*
 
@@ -44,7 +44,12 @@ Alexa+ ──► MCP Tool ──► Supervisor ──► Specialist Agent ──
                                                      logInteraction (every turn, server-side)
 ```
 
-A TypeScript MCP server exposes two tools to Alexa+: `converse` and `morning_memory`. Every request passes through a Supervisor that classifies intent and routes to one of three specialist agents. Each agent runs a real agentic tool-use loop — the LLM decides which tools to call, in which order, based on its system prompt. No hardcoded function chains.
+A TypeScript MCP server built to spec 2025-11-25 using Streamable HTTP transport exposes two tools to Alexa+:
+
+- **`get_memory`** — semantic search over the parent's personal memory graph; called by the Conversation Agent on every turn before responding.
+- **`add_memory`** — validates and stores a new memory from a family member, extracts named entities into the graph, and syncs to Bedrock Knowledge Base.
+
+Every request passes through a Supervisor that classifies intent and routes to one of three specialist agents. Each agent runs a real agentic tool-use loop — the LLM decides which tools to call, in which order, based on its system prompt. No hardcoded function chains.
 
 | Agent | Triggered by | Tools | Responsibility |
 |---|---|---|---|
