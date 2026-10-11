@@ -208,7 +208,7 @@ folkore/
 │       ├── hallucination.ts             # Response contains only grounded people/places from seed data
 │       └── curation.ts                  # Add memory → retrieve it back, PII scrub verified live
 ├── tests/
-│   └── unit.test.ts                     # 91 unit tests — confusion detection, agent loop, PII scrubbing, rate limiting (no AWS required)
+│   └── unit.test.ts                     # 90 unit tests — confusion detection, agent loop, PII scrubbing, rate limiting (no AWS required)
 ├── scripts/
 │   ├── smoke-test.ts                    # 14-step end-to-end test — db, agents, Frank's seed data, PII guardrail verification
 │   └── seed-frank.ts                    # Demo seed — Frank Henderson persona, 24 memories, 6 weeks of natural curation
@@ -328,7 +328,7 @@ npm run dev
 npm test
 ```
 
-91 tests, no AWS required. Covers confusion detection (temporal/person/place + 15 non-confusion phrases), the agentic tool-use loop (happy paths, error handling, max iterations), keyword scoring logic, InsightSummary math, supervisor routing, PII scrubbing, and rate limiting.
+90 tests, no AWS required. Covers confusion detection (temporal/person/place, all valid types, fallback on error), the agentic tool-use loop (happy paths, error handling, max iterations, history threading), keyword scoring logic, InsightSummary math, supervisor routing, PII scrubbing (phone, email, SSN, card, passport, multi-PII), and rate limiting.
 
 ### 8. Run behavioral evals
 
@@ -336,7 +336,7 @@ npm test
 npm run eval
 ```
 
-Requires live AWS (Bedrock + DynamoDB). Runs 16 behavioral assertions against Frank Henderson's seeded data across 5 suites: tone, retrieval correctness, confusion detection, hallucination guard, and curation write/read verification.
+Requires live AWS (Bedrock + DynamoDB). Runs 20 behavioral assertions against Frank Henderson's seeded data across 5 suites: tone, retrieval correctness, confusion detection, hallucination guard, and curation write/read verification.
 
 ### 9. Run smoke test
 

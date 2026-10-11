@@ -8,7 +8,7 @@ export const RETRIEVAL_CASES: EvalCase[] = [
     id: "ret-01",
     description: "Asking about Marcus returns his age or dinosaur/palaeontologist fact",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "Tell me about my grandson",
         initiatedBy: "parent",
@@ -27,7 +27,7 @@ export const RETRIEVAL_CASES: EvalCase[] = [
     id: "ret-02",
     description: "Asking about Lake Tahoe returns fishing or family tradition fact",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "I keep thinking about a lake we used to go to. Was it something about fishing?",
         initiatedBy: "parent",
@@ -44,7 +44,7 @@ export const RETRIEVAL_CASES: EvalCase[] = [
     id: "ret-03",
     description: "Asking about apple pie returns Sarah / Sunday baking fact",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "Someone used to bake for me — apple pie I think. Who was it?",
         initiatedBy: "parent",
@@ -61,7 +61,7 @@ export const RETRIEVAL_CASES: EvalCase[] = [
     id: "ret-04",
     description: "Confusion utterance about a person triggers memory retrieval, not a generic reply",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "Who is Sarah?",
         initiatedBy: "parent",

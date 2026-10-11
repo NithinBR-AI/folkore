@@ -24,7 +24,7 @@ export const TONE_CASES: EvalCase[] = [
     id: "tone-01",
     description: "Response about Marcus uses his name — feels personal not generic",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "I keep thinking about some boy — something about dinosaurs. Who is he?",
         initiatedBy: "parent",
@@ -40,7 +40,7 @@ export const TONE_CASES: EvalCase[] = [
     id: "tone-02",
     description: "Morning memory is warm and personal, not a data readout",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "",
         initiatedBy: "system",
@@ -55,7 +55,7 @@ export const TONE_CASES: EvalCase[] = [
     id: "tone-03",
     description: "Family insight response is empathetic, not a raw stats dump",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "How has dad been doing this week?",
         initiatedBy: "family",

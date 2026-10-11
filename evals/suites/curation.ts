@@ -60,7 +60,7 @@ export const CURATION_CASES: EvalCase[] = [
     id: "cur-03",
     description: "Family utterance via Supervisor routes to Curation Agent and returns confirmation",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "Dad loves watching the Cardinals play baseball on Sunday afternoons",
         initiatedBy: "family",

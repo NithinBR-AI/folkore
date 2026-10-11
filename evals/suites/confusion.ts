@@ -14,7 +14,7 @@ export const CONFUSION_CASES: EvalCase[] = [
     id: "conf-01",
     description: "Temporal confusion: 'what year is it' detected",
     run: async (): Promise<EvalResult> => {
-      const result = detectConfusion("What year is it?");
+      const result = await detectConfusion("What year is it?");
       if (!result.detected || result.type !== "temporal") {
         return { pass: false, reason: `Expected temporal, got detected=${result.detected} type=${result.type}` };
       }
@@ -25,7 +25,7 @@ export const CONFUSION_CASES: EvalCase[] = [
     id: "conf-02",
     description: "Person confusion: 'who is Marcus' detected",
     run: async (): Promise<EvalResult> => {
-      const result = detectConfusion("Who is Marcus?");
+      const result = await detectConfusion("Who is Marcus?");
       if (!result.detected || result.type !== "person") {
         return { pass: false, reason: `Expected person, got detected=${result.detected} type=${result.type}` };
       }
@@ -36,7 +36,7 @@ export const CONFUSION_CASES: EvalCase[] = [
     id: "conf-03",
     description: "Place confusion: 'where am I' detected",
     run: async (): Promise<EvalResult> => {
-      const result = detectConfusion("Where am I?");
+      const result = await detectConfusion("Where am I?");
       if (!result.detected || result.type !== "place") {
         return { pass: false, reason: `Expected place, got detected=${result.detected} type=${result.type}` };
       }
@@ -47,7 +47,7 @@ export const CONFUSION_CASES: EvalCase[] = [
     id: "conf-04",
     description: "Safe utterance: 'tell me about Marcus' not flagged as confusion",
     run: async (): Promise<EvalResult> => {
-      const result = detectConfusion("Tell me about Marcus");
+      const result = await detectConfusion("Tell me about Marcus");
       if (result.detected) {
         return { pass: false, reason: `False positive — detected=${result.detected} type=${result.type}` };
       }
@@ -58,7 +58,7 @@ export const CONFUSION_CASES: EvalCase[] = [
     id: "conf-05",
     description: "Safe utterance: 'I remember fishing at the lake' not flagged",
     run: async (): Promise<EvalResult> => {
-      const result = detectConfusion("I remember fishing at the lake with my son");
+      const result = await detectConfusion("I remember fishing at the lake with my son");
       if (result.detected) {
         return { pass: false, reason: `False positive — type=${result.type}` };
       }
@@ -69,7 +69,7 @@ export const CONFUSION_CASES: EvalCase[] = [
     id: "conf-06",
     description: "Person confusion utterance routed to agent — response contains a name from Frank's world",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "I don't know who this woman is who keeps calling me",
         initiatedBy: "parent",

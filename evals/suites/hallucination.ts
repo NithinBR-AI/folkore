@@ -33,7 +33,7 @@ export const HALLUCINATION_CASES: EvalCase[] = [
     id: "hall-01",
     description: "Marcus response contains no invented names not in Frank's seed data",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "Who is my grandson?",
         initiatedBy: "parent",
@@ -49,7 +49,7 @@ export const HALLUCINATION_CASES: EvalCase[] = [
     id: "hall-02",
     description: "Family insight response references only real interaction patterns — no invented events",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "Has dad had any good days this week?",
         initiatedBy: "family",
@@ -65,7 +65,7 @@ export const HALLUCINATION_CASES: EvalCase[] = [
     id: "hall-03",
     description: "Open-ended memory question response is grounded in Frank's world",
     run: async (): Promise<EvalResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId: PERSON_ID,
         utterance: "Tell me something I love",
         initiatedBy: "parent",

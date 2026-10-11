@@ -10,7 +10,7 @@
     "serve:stdio": "tsx src/server/main.ts --stdio",
     "start": "cross-env NODE_ENV=development npm run build && npm run serve",
     "test": "npx tsx --test tests/unit.test.ts",
-    "eval": "npx tsx evals/eval-runner.ts",
+    "eval": "cross-env AWS_PROFILE=personal npx tsx evals/eval-runner.ts",
     "build:lambda": "npm run build && node build-lambda.mjs"
   },
   "dependencies": {
