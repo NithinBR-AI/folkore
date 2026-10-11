@@ -1,0 +1,735 @@
+<title>Folkore Architecture</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Cormorant+Garamond:wght@300;400&family=Inter:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --bg:            #080c10;
+    --bg-card:       #0e1520;
+    --bg-card-alt:   #0a1018;
+    --bg-pipeline:   #0b1219;
+    --border:        #1e2e3e;
+    --border-accent: #1a3a50;
+    --text-primary:  #dde8f0;
+    --text-secondary:#7a9ab0;
+    --text-muted:    #3a5468;
+    --alexa:         #00c8ff;
+    --alexa-dim:     rgba(0,200,255,0.08);
+    --alexa-mid:     rgba(0,200,255,0.22);
+    --amber:         #c89b5f;
+    --amber-dim:     rgba(200,155,95,0.1);
+    --green:         #3dd68c;
+    --green-dim:     #061a10;
+    --purple:        #a78bfa;
+    --orange:        #fb923c;
+    --connector:     #1e3a50;
+    --font-mono:     'JetBrains Mono', 'Courier New', monospace;
+    --font-sans:     'Inter', -apple-system, sans-serif;
+    --font-display:  'Cormorant Garamond', Georgia, serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    padding: 2rem;
+    min-height: 100svh;
+  }
+
+  /* faint grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,200,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,200,255,0.025) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* ── Header ── */
+  .page-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+    position: relative;
+    z-index: 1;
+  }
+  .page-header h1 {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    font-weight: 300;
+    color: var(--text-primary);
+    letter-spacing: 0.05em;
+  }
+  .page-header h1 span { color: var(--alexa); }
+  .page-header .sub {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-top: 0.4rem;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── Diagram grid ── */
+  .diagram {
+    display: grid;
+    grid-template-columns: 130px 1fr 220px;
+    gap: 0;
+    align-items: start;
+    max-width: 1100px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── Entry column (Alexa) ── */
+  .entry-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 3rem;
+    gap: 0.4rem;
+  }
+
+  /* Alexa oval ring — mini version */
+  .alexa-oval-mini {
+    width: 60px;
+    height: 18px;
+    border-radius: 100px;
+    border: 1.5px solid var(--alexa-mid);
+    position: relative;
+    overflow: hidden;
+    background: var(--alexa-dim);
+  }
+  .alexa-oval-mini::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -60%;
+    width: 50%;
+    height: calc(100% + 4px);
+    background: linear-gradient(90deg, transparent, var(--alexa), transparent);
+    filter: blur(1px);
+    animation: sweep 2.5s ease-in-out infinite;
+  }
+  @keyframes sweep {
+    0% { left: -60%; opacity: 0; }
+    15% { opacity: 1; }
+    85% { opacity: 1; }
+    100% { left: 110%; opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .alexa-oval-mini::before { animation: none; left: 20%; opacity: 0.7; }
+  }
+
+  .entry-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--alexa);
+    text-align: center;
+    margin-top: 0.35rem;
+  }
+  .entry-sub {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    text-align: center;
+    max-width: 110px;
+    line-height: 1.4;
+  }
+
+  .entry-arrow-down {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.8rem;
+  }
+  .v-line { width: 1px; height: 22px; background: var(--connector); }
+  .arrow-label { font-family: var(--font-mono); font-size: 0.58rem; color: var(--text-muted); }
+  .arrow-tip { font-size: 0.75rem; color: var(--connector); }
+
+  .entry-arrow-return {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 10.5rem;
+  }
+  .arrow-tip-alexa { font-size: 0.75rem; color: var(--alexa); }
+  .arrow-label-alexa { font-family: var(--font-mono); font-size: 0.58rem; color: var(--alexa); }
+  .v-line-alexa { width: 1px; height: 22px; background: var(--alexa); opacity: 0.35; }
+
+  /* ── Pipeline column ── */
+  .pipeline-col { padding: 0 1.2rem; }
+
+  .pipeline-boundary {
+    border: 1.5px solid var(--border-accent);
+    border-radius: 14px;
+    padding: 1.2rem;
+    background: var(--bg-pipeline);
+    position: relative;
+  }
+
+  .pipeline-badge {
+    position: absolute;
+    top: -11px;
+    right: 14px;
+    background: var(--alexa);
+    color: #080c10;
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 700;
+    padding: 0.18rem 0.65rem;
+    border-radius: 4px;
+    letter-spacing: 0.08em;
+  }
+  .pipeline-sub-badge {
+    position: absolute;
+    top: -11px;
+    left: 14px;
+    background: var(--bg-card-alt);
+    color: var(--amber);
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 600;
+    padding: 0.18rem 0.65rem;
+    border-radius: 4px;
+    border: 1px solid rgba(200,155,95,0.3);
+    letter-spacing: 0.04em;
+  }
+  .pipeline-label {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 0.9rem;
+    padding-left: 2px;
+  }
+  .agents-stack { display: flex; flex-direction: column; gap: 0.5rem; }
+
+  /* ── Agent cards ── */
+  .agent-card {
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 0.7rem 0.9rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    position: relative;
+  }
+  .agent-card.conv   { border-left: 3px solid var(--amber); }
+  .agent-card.cur    { border-left: 3px solid var(--green); }
+  .agent-card.ins    { border-left: 3px solid var(--purple); }
+  .agent-card.sup    { border-left: 3px solid var(--alexa); }
+
+  .agent-num {
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    position: absolute;
+    top: 0.5rem;
+    right: 0.7rem;
+    letter-spacing: 0.04em;
+  }
+  .agent-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+  }
+  .icon-sup  { background: rgba(0,200,255,0.08); }
+  .icon-conv { background: rgba(200,155,95,0.1); }
+  .icon-cur  { background: rgba(61,214,140,0.08); }
+  .icon-ins  { background: rgba(167,139,250,0.08); }
+
+  .agent-info { flex: 1; min-width: 0; padding-right: 2rem; }
+  .agent-name {
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.2;
+  }
+  .agent-desc {
+    font-size: 0.66rem;
+    color: var(--text-secondary);
+    margin-top: 0.2rem;
+    line-height: 1.35;
+  }
+  .agent-tools {
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    color: var(--text-muted);
+    margin-top: 0.2rem;
+    line-height: 1.3;
+  }
+  .agent-tools span { color: var(--alexa); opacity: 0.8; }
+  .agent-tools .amber-tag { color: var(--amber); opacity: 1; }
+  .agent-tools .green-tag { color: var(--green); opacity: 1; }
+
+  .flow-arrow {
+    text-align: center;
+    color: var(--connector);
+    font-size: 0.9rem;
+    padding: 0.1rem 0;
+    user-select: none;
+    line-height: 1;
+  }
+
+  /* Retrieval boundary */
+  .retrieval-boundary {
+    border: 1px dashed var(--border-accent);
+    border-radius: 10px;
+    padding: 0.8rem;
+    background: var(--bg-card-alt);
+    position: relative;
+    margin-top: 0.5rem;
+  }
+  .retrieval-badge {
+    position: absolute;
+    top: -10px;
+    left: 12px;
+    background: var(--bg-card-alt);
+    color: var(--alexa);
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    font-weight: 700;
+    padding: 0.15rem 0.55rem;
+    border-radius: 3px;
+    border: 1px solid var(--border-accent);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .retrieval-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+  }
+  .ret-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 0.55rem 0.6rem;
+  }
+  .ret-num {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    font-weight: 300;
+    color: var(--alexa);
+    line-height: 1;
+  }
+  .ret-name {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-top: 0.15rem;
+  }
+  .ret-desc {
+    font-size: 0.58rem;
+    color: var(--text-secondary);
+    margin-top: 0.15rem;
+    line-height: 1.4;
+  }
+
+  /* Guardrails boundary */
+  .guard-boundary {
+    border: 1px dashed rgba(61,214,140,0.2);
+    border-radius: 10px;
+    padding: 0.8rem;
+    background: var(--green-dim);
+    position: relative;
+    margin-top: 0.5rem;
+  }
+  .guard-badge {
+    position: absolute;
+    top: -10px;
+    left: 12px;
+    background: var(--green-dim);
+    color: var(--green);
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    font-weight: 700;
+    padding: 0.15rem 0.55rem;
+    border-radius: 3px;
+    border: 1px solid rgba(61,214,140,0.2);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .guard-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin-top: 0.4rem;
+  }
+  .guard-box {
+    background: var(--bg-card);
+    border: 1px solid rgba(61,214,140,0.15);
+    border-radius: 7px;
+    padding: 0.5rem 0.6rem;
+  }
+  .guard-name { font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700; color: var(--green); }
+  .guard-desc { font-size: 0.58rem; color: var(--text-secondary); margin-top: 0.1rem; line-height: 1.35; }
+
+  /* State bar */
+  .state-bar {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    align-items: center;
+  }
+  .state-bar-label {
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    width: 100%;
+    margin-bottom: 0.2rem;
+  }
+  .state-pill {
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    background: var(--bg-card-alt);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+  }
+  .state-pill.alexa-st { background: rgba(0,200,255,0.08); border-color: var(--alexa-mid); color: var(--alexa); }
+  .state-pill.amber-st { background: rgba(200,155,95,0.08); border-color: rgba(200,155,95,0.3); color: var(--amber); }
+  .state-pill.done-st  { background: var(--green-dim); border-color: rgba(61,214,140,0.3); color: var(--green); }
+  .state-arrow { font-size: 0.6rem; color: var(--border-accent); }
+
+  /* ── Tools column ── */
+  .tools-col { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 0.2rem; }
+
+  .tool-group-label {
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding-left: 2px;
+    margin-top: 0.6rem;
+  }
+  .tool-group-label:first-child { margin-top: 0; }
+
+  .tool-card {
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+  }
+  .tool-card.aws-t    { border-left: 3px solid var(--alexa); }
+  .tool-card.mcp-t    { border-left: 3px solid var(--amber); }
+  .tool-card.guard-t  { border-left: 3px solid var(--green); }
+  .tool-card.data-t   { border-left: 3px solid var(--purple); }
+
+  .tool-emoji { font-size: 0.95rem; flex-shrink: 0; }
+  .tool-info  { min-width: 0; }
+  .tool-name  { font-family: var(--font-mono); font-size: 0.68rem; font-weight: 700; color: var(--text-primary); line-height: 1.2; }
+  .tool-desc  { font-size: 0.6rem; color: var(--text-secondary); line-height: 1.3; margin-top: 0.1rem; }
+
+  .aws-badge {
+    font-family: var(--font-mono);
+    font-size: 0.52rem;
+    font-weight: 700;
+    color: var(--alexa);
+    background: rgba(0,200,255,0.06);
+    border: 1px solid var(--alexa-mid);
+    border-radius: 3px;
+    padding: 0.1rem 0.35rem;
+    letter-spacing: 0.05em;
+    display: inline-block;
+    margin-top: 0.2rem;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    max-width: 1100px;
+    margin: 1.5rem auto 0;
+    display: flex;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    position: relative;
+    z-index: 1;
+  }
+  .legend-title { font-family: var(--font-mono); font-size: 0.58rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
+  .legend-item  { display: flex; align-items: center; gap: 0.4rem; font-size: 0.65rem; color: var(--text-secondary); font-family: var(--font-mono); }
+  .legend-dot   { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+</style>
+
+<div class="page-header">
+  <h1><span>Folk</span>ore — System Architecture</h1>
+  <div class="sub">Amazon Alexa+ · Model Context Protocol · Amazon Bedrock · Claude 3 Sonnet · DynamoDB · S3 · Bedrock Knowledge Base</div>
+</div>
+
+<div class="diagram">
+
+  <!-- ENTRY: Alexa+ -->
+  <div class="entry-col">
+    <div class="alexa-oval-mini"></div>
+    <div class="entry-label">Alexa+</div>
+    <div class="entry-sub">Voice input<br>parent · family · system</div>
+
+    <div class="entry-arrow-down">
+      <div class="v-line"></div>
+      <div class="arrow-label">MCP</div>
+      <div class="arrow-tip">→</div>
+    </div>
+
+    <div class="entry-arrow-return">
+      <div class="arrow-tip-alexa">←</div>
+      <div class="arrow-label-alexa">response</div>
+      <div class="v-line-alexa"></div>
+    </div>
+  </div>
+
+  <!-- PIPELINE -->
+  <div class="pipeline-col">
+    <div class="pipeline-boundary">
+      <div class="pipeline-sub-badge">4-Agent Orchestrator</div>
+      <div class="pipeline-badge">AWS BEDROCK</div>
+
+      <div class="pipeline-label">Folkore Agent Pipeline</div>
+
+      <div class="agents-stack">
+
+        <div class="agent-card sup">
+          <div class="agent-num">A0</div>
+          <div class="agent-icon icon-sup">🧭</div>
+          <div class="agent-info">
+            <div class="agent-name">Supervisor Agent</div>
+            <div class="agent-desc">Classifies every utterance — parent asking, family adding, system trigger — and routes to the right specialist. LLM classifier (DeepSeek V3.2 via Bedrock Mantle, temp 0) detects temporal / person / place confusion before routing.</div>
+            <div class="agent-tools">uses: <span>detectConfusion()</span> · <span>runSupervisor()</span> · <span class="amber-tag">Claude 3 Sonnet</span></div>
+          </div>
+        </div>
+
+        <div class="flow-arrow">↓ &nbsp; routes to one of</div>
+
+        <div class="agent-card conv">
+          <div class="agent-num">A1</div>
+          <div class="agent-icon icon-conv">💬</div>
+          <div class="agent-info">
+            <div class="agent-name">Conversation Agent</div>
+            <div class="agent-desc">Parent-facing. Runs 3-layer hybrid retrieval, composes warm memory response, logs every interaction to DynamoDB for mood tracking.</div>
+            <div class="agent-tools">uses: <span>getMemory()</span> · <span>traverseGraph()</span> · <span>logInteraction()</span> · <span class="amber-tag">Bedrock KB</span></div>
+          </div>
+        </div>
+
+        <div class="flow-arrow">↓</div>
+
+        <div class="agent-card cur">
+          <div class="agent-num">A2</div>
+          <div class="agent-icon icon-cur">📝</div>
+          <div class="agent-info">
+            <div class="agent-name">Curation Agent</div>
+            <div class="agent-desc">Family-facing. Extracts named entities (person / place / thing), builds knowledge graph nodes + edges, writes to DynamoDB, uploads to S3 and Bedrock KB simultaneously.</div>
+            <div class="agent-tools">uses: <span>addMemory()</span> · <span>addNode()</span> · <span>addEdge()</span> · <span class="green-tag">scrubMemory()</span></div>
+          </div>
+        </div>
+
+        <div class="flow-arrow">↓</div>
+
+        <div class="agent-card ins">
+          <div class="agent-num">A3</div>
+          <div class="agent-icon icon-ins">📊</div>
+          <div class="agent-info">
+            <div class="agent-name">Insight Agent</div>
+            <div class="agent-desc">Analytics for family. Aggregates mood trends, confusion rate, most-accessed memories, and generates a weekly narrative for remote caregivers.</div>
+            <div class="agent-tools">uses: <span>getInsightSummary()</span> · <span>confusion_rate</span> · <span class="amber-tag">Claude 3 Sonnet</span></div>
+          </div>
+        </div>
+
+        <!-- 3-layer retrieval -->
+        <div class="retrieval-boundary">
+          <div class="retrieval-badge">3-Layer Hybrid Retrieval</div>
+          <div class="retrieval-row">
+            <div class="ret-box">
+              <div class="ret-num">1</div>
+              <div class="ret-name">Memory Graph</div>
+              <div class="ret-desc">Named entity → node → edges → memory IDs. Instant. "Marcus" → 3 IDs in one hop.</div>
+            </div>
+            <div class="ret-box">
+              <div class="ret-num">2</div>
+              <div class="ret-name">DynamoDB Keyword</div>
+              <div class="ret-desc">Fetch all, score by field overlap (who / what / when / tags). Always fresh — catches memories added seconds ago.</div>
+            </div>
+            <div class="ret-box">
+              <div class="ret-num">3</div>
+              <div class="ret-name">Bedrock KB Semantic</div>
+              <div class="ret-desc">Vector similarity via Knowledge Base. Best-effort fallback. Failures silently swallowed — layers 1+2 cover freshness.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Guardrails -->
+        <div class="guard-boundary">
+          <div class="guard-badge">Guardrails</div>
+          <div class="guard-row">
+            <div class="guard-box">
+              <div class="guard-name">PII Scrubbing</div>
+              <div class="guard-desc">Phone · email · SSN · card · passport ID stripped from all memory fields before DynamoDB + S3 write.</div>
+            </div>
+            <div class="guard-box">
+              <div class="guard-name">Rate Limiting</div>
+              <div class="guard-desc">20 req/min per IP on /api/converse. Sliding window. 429 + Retry-After on excess.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- State bar -->
+        <div class="state-bar">
+          <div class="state-bar-label">Request Flow</div>
+          <span class="state-pill alexa-st">Alexa+</span>
+          <span class="state-arrow">→</span>
+          <span class="state-pill alexa-st">MCP</span>
+          <span class="state-arrow">→</span>
+          <span class="state-pill">Supervisor</span>
+          <span class="state-arrow">→</span>
+          <span class="state-pill amber-st">Conversation</span>
+          <span class="state-arrow">|</span>
+          <span class="state-pill" style="border-color:rgba(61,214,140,0.3);color:var(--green);">Curation</span>
+          <span class="state-arrow">|</span>
+          <span class="state-pill" style="border-color:rgba(167,139,250,0.3);color:var(--purple);">Insight</span>
+          <span class="state-arrow">→</span>
+          <span class="state-pill done-st">Response</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- TOOLS -->
+  <div class="tools-col">
+
+    <div class="tool-group-label">Voice Interface</div>
+
+    <div class="tool-card mcp-t">
+      <div class="tool-emoji">🔵</div>
+      <div class="tool-info">
+        <div class="tool-name">Alexa+ MCP</div>
+        <div class="tool-desc">Model Context Protocol<br>voice ↔ tool bridge</div>
+        <div class="aws-badge">ALEXA+</div>
+      </div>
+    </div>
+
+    <div class="tool-group-label">LLM</div>
+
+    <div class="tool-card aws-t">
+      <div class="tool-emoji">🧠</div>
+      <div class="tool-info">
+        <div class="tool-name">Amazon Bedrock</div>
+        <div class="tool-desc">Claude 3 Sonnet<br>all 4 agents</div>
+        <div class="aws-badge">AWS</div>
+      </div>
+    </div>
+
+    <div class="tool-group-label">Memory Storage</div>
+
+    <div class="tool-card aws-t">
+      <div class="tool-emoji">🗄️</div>
+      <div class="tool-info">
+        <div class="tool-name">DynamoDB</div>
+        <div class="tool-desc">Memories · graph nodes/edges<br>interactions · morning queue</div>
+        <div class="aws-badge">AWS</div>
+      </div>
+    </div>
+
+    <div class="tool-card aws-t">
+      <div class="tool-emoji">🪣</div>
+      <div class="tool-info">
+        <div class="tool-name">Amazon S3</div>
+        <div class="tool-desc">Full memory objects<br>uploaded on every addMemory()</div>
+        <div class="aws-badge">AWS</div>
+      </div>
+    </div>
+
+    <div class="tool-card aws-t">
+      <div class="tool-emoji">🔍</div>
+      <div class="tool-info">
+        <div class="tool-name">Bedrock Knowledge Base</div>
+        <div class="tool-desc">Semantic vector retrieval<br>layer 3 of hybrid search</div>
+        <div class="aws-badge">AWS</div>
+      </div>
+    </div>
+
+    <div class="tool-group-label">Guardrails</div>
+
+    <div class="tool-card guard-t">
+      <div class="tool-emoji">🛡️</div>
+      <div class="tool-info">
+        <div class="tool-name">PII Scrubbing</div>
+        <div class="tool-desc">Runs before every<br>DynamoDB + S3 write</div>
+      </div>
+    </div>
+
+    <div class="tool-card guard-t">
+      <div class="tool-emoji">⏱️</div>
+      <div class="tool-info">
+        <div class="tool-name">Rate Limiter</div>
+        <div class="tool-desc">Express middleware<br>20 req/min per IP</div>
+      </div>
+    </div>
+
+    <div class="tool-group-label">Proactive Surface</div>
+
+    <div class="tool-card data-t">
+      <div class="tool-emoji">🌅</div>
+      <div class="tool-info">
+        <div class="tool-name">Morning Memory</div>
+        <div class="tool-desc">System trigger → Supervisor<br>Alexa speaks first, unprompted</div>
+      </div>
+    </div>
+
+    <div class="tool-card data-t">
+      <div class="tool-emoji">📬</div>
+      <div class="tool-info">
+        <div class="tool-name">Weekly Digest</div>
+        <div class="tool-desc">Family email — mood, confusion rate, top memories. Manual trigger now · SNS in Stage 3</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <span class="legend-title">Legend</span>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--alexa);"></div>Alexa+ / AWS service</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--amber);"></div>Conversation Agent (parent)</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--green);"></div>Curation Agent + Guardrails</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--purple);"></div>Insight Agent (family analytics)</div>
+  <div class="legend-item" style="margin-left:auto;">
+    <span style="font-family:var(--font-mono);font-size:0.58rem;color:var(--text-muted);">Amazon Alexa+ MCP Hackathon · 2025</span>
+  </div>
+</div>
