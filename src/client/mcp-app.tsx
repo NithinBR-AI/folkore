@@ -56,7 +56,7 @@ async function apiFetch(path: string, body: object) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return r.json() as Promise<{ response?: string; error?: string }>;
+  return r.json() as Promise<{ response?: string; error?: string; confusion?: boolean }>;
 }
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
@@ -146,8 +146,6 @@ function FrankView() {
     setInput("");
     setRing("responding");
 
-    const isConfusion = /forget|forgot|don't know|what year|what day|who (is|are|was)/i.test(text);
-
     try {
       const data = await apiFetch("/api/converse", {
         person_id: FRANK_ID,
@@ -155,13 +153,14 @@ function FrankView() {
         initiated_by: "parent",
         history: historyRef.current,
       });
+      const isConfusion = !!data.confusion;
       if (isConfusion) setConfusion(true);
-      const reply = data.response ?? "I'm here with you, Frank.";
+      const reply = data.response ?? "I'm here with you.";
       push(bubble("alexa", reply, isConfusion));
       historyRef.current = [
         ...historyRef.current,
-        { role: "user", content: text.trim() },
-        { role: "assistant", content: reply },
+        { role: "user" as const, content: text.trim() },
+        { role: "assistant" as const, content: reply },
       ].slice(-10);
     } catch {
       push(bubble("alexa", "I'm sorry, I didn't catch that. Can you say it again?"));
@@ -312,9 +311,9 @@ function CuratePanel() {
       // Append this turn to history
       historyRef.current = [
         ...historyRef.current,
-        { role: "user", content: text.trim() },
-        { role: "assistant", content: reply },
-      ].slice(-10); // keep last 10 messages (5 turns)
+        { role: "user" as const, content: text.trim() },
+        { role: "assistant" as const, content: reply },
+      ].slice(-10);
 
       // Reset history once the agent confirms the memory is saved
       if (SAVED_PATTERN.test(reply)) {

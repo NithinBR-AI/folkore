@@ -38,7 +38,7 @@ export function createServer(): McpServer {
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async (args): Promise<CallToolResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId:    args.person_id,
         utterance:   args.utterance,
         initiatedBy: args.initiated_by,
@@ -65,7 +65,7 @@ export function createServer(): McpServer {
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
     async (args): Promise<CallToolResult> => {
-      const response = await runSupervisor({
+      const { response } = await runSupervisor({
         personId:    args.person_id,
         utterance:   "",
         initiatedBy: "system",

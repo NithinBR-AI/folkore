@@ -18,16 +18,18 @@ import {
 import { randomUUID } from "node:crypto";
 import { scrubMemory } from "./guardrails/index.js";
 
-const s3 = new S3Client({ region: process.env.AWS_REGION ?? "us-east-1" });
-const bedrockAgentRuntime = new BedrockAgentRuntimeClient({ region: process.env.AWS_REGION ?? "us-east-1" });
-const bedrockAgent = new BedrockAgentClient({ region: process.env.AWS_REGION ?? "us-east-1" });
+const region = process.env.AWS_REGION ?? "us-east-1";
+
+const s3 = new S3Client({ region });
+const bedrockAgentRuntime = new BedrockAgentRuntimeClient({ region });
+const bedrockAgent = new BedrockAgentClient({ region });
 
 const KB_DATA_SOURCE_ID = process.env.FOLKORE_KB_DATA_SOURCE_ID ?? "";
 
 const KB_ID     = process.env.FOLKORE_KB_ID     ?? "8TRTP9TPP2";
 const KB_BUCKET = process.env.FOLKORE_KB_BUCKET ?? "folkore-memory-kb";
 
-const client = new DynamoDBClient({ region: process.env.AWS_REGION ?? "us-east-1" });
+const client = new DynamoDBClient({ region });
 const db = DynamoDBDocumentClient.from(client);
 
 const TABLES = {

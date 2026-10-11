@@ -1,4 +1,5 @@
-import "dotenv/config";
+import { config } from "dotenv";
+config({ override: true });
 import { createMcpExpressApp } from "@modelcontextprotocol/express";
 import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
 import type { McpServer } from "@modelcontextprotocol/server";
@@ -38,8 +39,8 @@ async function startHTTP(factory: () => McpServer): Promise<void> {
         person_id: string; utterance: string; initiated_by: string; added_by?: string;
         history?: Array<{ role: "user" | "assistant"; content: string }>;
       };
-      const response = await runSupervisor({ personId: person_id, utterance, initiatedBy: initiated_by as "parent" | "family" | "system", addedBy: added_by, history });
-      res.json({ response });
+      const { response, confusion } = await runSupervisor({ personId: person_id, utterance, initiatedBy: initiated_by as "parent" | "family" | "system", addedBy: added_by, history });
+      res.json({ response, confusion });
     } catch (e) {
       res.status(500).json({ error: (e as Error).message });
     }
@@ -48,7 +49,7 @@ async function startHTTP(factory: () => McpServer): Promise<void> {
   app.post("/api/morning", async (req: Request, res: Response) => {
     try {
       const { person_id } = req.body as { person_id: string };
-      const response = await runSupervisor({ personId: person_id, utterance: "", initiatedBy: "system" });
+      const { response } = await runSupervisor({ personId: person_id, utterance: "", initiatedBy: "system" });
       res.json({ response });
     } catch (e) {
       res.status(500).json({ error: (e as Error).message });

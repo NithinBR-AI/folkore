@@ -36,16 +36,21 @@ export interface SupervisorRequest {
   history?:    HistoryMessage[];
 }
 
-export async function runSupervisor(req: SupervisorRequest): Promise<string> {
+export async function runSupervisor(req: SupervisorRequest): Promise<{ response: string; confusion: boolean }> {
   const { personId, utterance, initiatedBy, addedBy, history = [] } = req;
 
   if (initiatedBy === "system") {
     const memory = await surfaceMorningMemory(personId);
-    if (!memory) return "Good morning! It's a lovely day. How are you feeling?";
-    return runConversationAgent(
+    if (!memory) return { response: "Good morning! It's a lovely day. How are you feeling?", confusion: false };
+    const result = await runConversationAgent(
       personId,
       `[MORNING GREETING] Start with "Good morning!" then weave in this memory warmly and naturally in 1–2 sentences — do not recite it as a fact, do not include dates or year ranges: ${memory.what}`,
     );
+    return result;
+  }
+
+  if (initiatedBy === "parent") {
+    return runConversationAgent(personId, utterance, history);
   }
 
   const intent = await classifyIntent(
@@ -54,12 +59,12 @@ export async function runSupervisor(req: SupervisorRequest): Promise<string> {
 
   switch (intent) {
     case "family":
-      return runCurationAgent(personId, utterance, addedBy ?? "family", history);
+      return { response: await runCurationAgent(personId, utterance, addedBy ?? "family", history), confusion: false };
     case "insight":
-      return runInsightAgent(personId);
+      return { response: await runInsightAgent(personId), confusion: false };
     case "morning": {
       const memory = await surfaceMorningMemory(personId);
-      if (!memory) return "Good morning! It's a lovely day. How are you feeling?";
+      if (!memory) return { response: "Good morning! It's a lovely day. How are you feeling?", confusion: false };
       return runConversationAgent(
         personId,
         `[MORNING GREETING] Start with "Good morning!" then weave in this memory warmly and naturally in 1–2 sentences — do not recite it as a fact, do not include dates or year ranges: ${memory.what}`,

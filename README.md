@@ -49,7 +49,7 @@ A TypeScript MCP server built to spec 2025-11-25 using Streamable HTTP transport
 - **`get_memory`** — semantic search over the parent's personal memory graph; called by the Conversation Agent on every turn before responding.
 - **`add_memory`** — validates and stores a new memory from a family member, extracts named entities into the graph, and syncs to Bedrock Knowledge Base.
 
-Every request passes through a Supervisor that classifies intent and routes to one of three specialist agents. Each agent runs a real agentic tool-use loop — the LLM decides which tools to call, in which order, based on its system prompt. No hardcoded function chains.
+Every request passes through a Supervisor that routes to one of three specialist agents. Parent messages bypass classification entirely — the client already signals intent, so the Supervisor routes directly to the Conversation Agent, saving a full LLM round trip. Each agent runs a real agentic tool-use loop — the LLM decides which tools to call, in which order, based on its system prompt. No hardcoded function chains.
 
 | Agent | Triggered by | Tools | Responsibility |
 |---|---|---|---|
@@ -114,7 +114,7 @@ DynamoDB stores nodes and edges as two lightweight tables. Neptune is the right 
 
 **Logging is the system's responsibility, not the agent's.** `logInteraction` runs unconditionally in the server wrapper after every conversation turn — not as an LLM tool call. Logging is guaranteed even if the agent errors, hits max iterations, or produces an empty response. The agent's only job is to retrieve and speak.
 
-**Confusion detection is deterministic, not LLM-judged.** A regex classifier on the utterance detects confusion signals before the agent runs — temporal (what year/day is it), person (misidentified someone), place (wrong location). The result is written to `folkore_conversation_log` with a typed `confusion_type` enum. The LLM never decides what counts as confusion.
+**Confusion detection is LLM-judged, not regex-based.** A lightweight LLM call (`temperature: 0, max_tokens: 50`) classifies each utterance for confusion signals in parallel with the main agent loop — zero added latency. It catches temporal confusion (what year/day is it), person misidentification, and place errors, including indirect signals that regex misses. The result is written to `folkore_conversation_log` with a typed `confusion_type` enum.
 
 **KB sync guard instead of fire-and-forget.** Every `add_memory` call checks for an already-running ingestion job via `ListIngestionJobs` before firing `StartIngestionJob`. If a job is in progress, the new S3 file is skipped — the running job will pick it up incrementally. `ConflictException` is swallowed silently. DynamoDB keyword retrieval ensures the memory is immediately queryable regardless of KB sync state.
 
@@ -412,7 +412,7 @@ Open `http://localhost:8080`, call `converse` with:
 | Feature | Detail |
 |---|---|
 | **Guaranteed interaction logging** | `logInteraction` runs unconditionally in the server wrapper after every turn — not as an LLM tool call. Logging persists even if the agent errors, hits max iterations, or returns an empty response. |
-| **Deterministic confusion detection** | A regex classifier on the utterance flags confusion before the agent runs. The LLM never decides what counts as confusion — temporal signals, person misidentification, and place errors each map to a typed enum in the log. |
+| **LLM confusion detection** | A dedicated LLM classifier (`temperature: 0`) runs in parallel with the conversation agent — zero added latency. Catches temporal, person, and place confusion including indirect signals that regex misses. Result is a typed enum written to the interaction log. |
 | **KB sync guard** | Every `add_memory` call checks for an already-running ingestion job via `ListIngestionJobs` before firing `StartIngestionJob`. If a job is in progress, the file is already in S3 — the running job will pick it up. `ConflictException` is swallowed silently. DynamoDB keyword retrieval ensures the memory is immediately queryable regardless of KB sync state. |
 | **Three-layer retrieval fallback** | If the Bedrock KB call fails or times out, graph traversal and DynamoDB keyword scoring always run. No single retrieval layer is a hard dependency — degraded retrieval still returns results. |
 | **Agent loop cap** | Every agent is capped at 8 tool-use iterations per turn. A runaway LLM that keeps calling tools never hangs the request — it hits the cap, returns whatever it has, and logs. |

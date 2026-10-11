@@ -29,8 +29,8 @@ app.post("/api/converse", rateLimitConverse, async (req: Request, res: Response)
       person_id: string; utterance: string; initiated_by: string; added_by?: string;
       history?: Array<{ role: "user" | "assistant"; content: string }>;
     };
-    const response = await runSupervisor({ personId: person_id, utterance, initiatedBy: initiated_by as "parent" | "family" | "system", addedBy: added_by, history });
-    res.json({ response });
+    const { response, confusion } = await runSupervisor({ personId: person_id, utterance, initiatedBy: initiated_by as "parent" | "family" | "system", addedBy: added_by, history });
+    res.json({ response, confusion });
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
   }
@@ -39,7 +39,7 @@ app.post("/api/converse", rateLimitConverse, async (req: Request, res: Response)
 app.post("/api/morning", async (req: Request, res: Response) => {
   try {
     const { person_id } = req.body as { person_id: string };
-    const response = await runSupervisor({ personId: person_id, utterance: "", initiatedBy: "system" });
+    const { response } = await runSupervisor({ personId: person_id, utterance: "", initiatedBy: "system" });
     res.json({ response });
   } catch (e) {
     res.status(500).json({ error: (e as Error).message });
