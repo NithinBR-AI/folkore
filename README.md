@@ -8,7 +8,7 @@ A family builds a living memory graph — stories, names, places, moments that m
 
 That distinction is the whole point. A general AI can tell you who Marcus is as a name. Only Folkore can tell Frank that Marcus is *his* grandson — the eight-year-old who wants to be a palaeontologist, who Frank calls his little dinosaur guy, who visited last summer and told Frank he'd name a fossil after him.
 
-Every morning, Frank can ask Alexa for a memory — and Folkore surfaces one from his personal graph. Every confusion signal is logged and surfaced back to the family as a weekly insight. The more the family adds, the better Alexa gets at helping.
+Every morning, Alexa surfaces a memory for Frank unprompted — before he says a word — from his personal graph. Every confusion signal is logged and surfaced back to the family as a weekly insight. The more the family adds, the better Alexa gets at helping.
 
 No app. No screen. Both Frank and his family interact entirely through Alexa — just voice, memory, and the people who matter. No training required.
 
@@ -30,7 +30,7 @@ When the family checks in, the Insight Agent tells them how Frank's been doing: 
 
 ## Proactive Morning Memory
 
-Each morning, Frank can ask Alexa for a memory and Folkore surfaces one — the least-recently-referenced memory in the graph. The Supervisor routes system-initiated requests directly to `surfaceMorningMemory`, bypassing the classifier entirely. Automatic daily triggering via EventBridge is Stage 3; the current demo uses a manual trigger, the same approach taken with the weekly digest.
+Each morning, Alexa surfaces a memory for Frank unprompted — the least-recently-referenced memory in the graph. The Supervisor routes system-initiated requests directly to `surfaceMorningMemory`, bypassing the classifier entirely. Automatic daily triggering via EventBridge is Stage 3; the current demo uses a manual trigger, the same approach taken with the weekly digest.
 
 Alexa leads the conversation: *"Good morning Frank. Marcus has a dinosaur project at school this week. He's been working on it all month."*
 
