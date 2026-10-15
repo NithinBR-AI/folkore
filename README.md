@@ -10,7 +10,9 @@ That distinction is the whole point. A general AI can tell you who Marcus is as 
 
 Every morning, Frank can ask Alexa for a memory — and Folkore surfaces one from his personal graph. Every confusion signal is logged and surfaced back to the family as a weekly insight. The more the family adds, the better Alexa gets at helping.
 
-No app. No screen for Frank. The family uses a web UI once to set up memories — after that, Frank's entire experience is voice. No training required. Just voice, memory, and the people who matter.
+No app. No screen. Both Frank and his family interact entirely through Alexa — just voice, memory, and the people who matter. No training required.
+
+> **Demo note:** The hackathon prototype includes a web UI that simulates both Frank's view and the family view in one place — so judges can exercise the full system without a physical Alexa device. In the real product, both roles are voice-native through Alexa+. Voice-native curation (family adding memories by speaking to Alexa) is Stage 2.
 
 Built for the **Build, Ship, Shape: Amazon Developer Hackathon 2026** — Alexa+ track.
 
@@ -18,7 +20,7 @@ Built for the **Build, Ship, Shape: Amazon Developer Hackathon 2026** — Alexa+
 
 ## How It Works
 
-A family member sets up Folkore once — Frank's daughter Sarah opens the web UI and starts adding memories. "Dad loves fishing at Lake Tahoe. He's been going every July for 20 years." "His grandson Marcus is 8. Loves dinosaurs. Wants to be a paleontologist." Each memory is stored with who, what, when, and tags. Relationships are extracted automatically into a graph — Marcus is linked to his memories, Lake Tahoe is linked to its stories.
+A family member sets up Folkore once — Frank's daughter Sarah talks to Alexa to add memories. "Dad loves fishing at Lake Tahoe. He's been going every July for 20 years." "His grandson Marcus is 8. Loves dinosaurs. Wants to be a paleontologist." Each memory is stored with who, what, when, and tags. Relationships are extracted automatically into a graph — Marcus is linked to his memories, Lake Tahoe is linked to its stories.
 
 When Frank talks to Alexa and can't remember his grandson's name, Alexa retrieves the right memories and responds warmly: *"That's okay, names can slip. Your grandson is Marcus — he's 8 and absolutely loves dinosaurs. He has a big school project this month."*
 
@@ -49,7 +51,7 @@ A TypeScript MCP server built to spec 2025-11-25 using Streamable HTTP transport
 - **`get_memory`** — semantic search over the parent's personal memory graph; called by the Conversation Agent on every turn before responding.
 - **`add_memory`** — validates and stores a new memory from a family member, extracts named entities into the graph, and syncs to Bedrock Knowledge Base.
 
-Every request passes through a Supervisor that routes to one of three specialist agents. Parent messages bypass classification entirely — the client already signals intent, so the Supervisor routes directly to the Conversation Agent, saving a full LLM round trip. Each agent runs a real agentic tool-use loop — the LLM decides which tools to call, in which order, based on its system prompt. No hardcoded function chains.
+Every request passes through a Supervisor that classifies intent — a single lightweight LLM call with no tools — and routes to one of three specialist agents, each running a real agentic tool-use loop where the LLM decides which tools to call and in which order. Parent utterances bypass classification entirely and route directly to the Conversation Agent, saving a full LLM round trip. No hardcoded function chains.
 
 | Agent | Triggered by | Tools | Responsibility |
 |---|---|---|---|
@@ -211,7 +213,8 @@ folkore/
 │   └── unit.test.ts                     # 90 unit tests — confusion detection, agent loop, PII scrubbing, rate limiting (no AWS required)
 ├── scripts/
 │   ├── smoke-test.ts                    # 14-step end-to-end test — db, agents, Frank's seed data, PII guardrail verification
-│   └── seed-frank.ts                    # Demo seed — Frank Henderson persona, 24 memories, 6 weeks of natural curation
+│   ├── seed-frank.ts                    # Primary seed — Frank Henderson persona, 24 memories, 6 weeks of natural curation
+│   └── seed-frank-extended.ts           # Extended seed — Emily's family, childhood, neighbours, 20 additional memories (run after seed-frank.ts)
 ├── .env.sample                          # Required env vars template
 ├── tsconfig.json                        # Client (bundler)
 ├── tsconfig.server.json                 # Server (NodeNext)
@@ -311,10 +314,10 @@ npm run serve
 
 Server starts at `http://localhost:3001/mcp`.
 
-Open the demo UI at **`http://localhost:3001/app`** — no Alexa+ required. The UI has two views:
+Open the demo UI at **`http://localhost:3001/app`** — no Alexa+ required. This is the hackathon prototype surface; it lets you exercise both roles in a browser without a physical Alexa device. The UI has two views:
 
-- **Frank** — Alexa ring with morning memory trigger, conversation bubbles, confusion detection
-- **Family** — Add Memory (conversational curation) + Frank's Week (mood, confusion rate, insight narrative)
+- **Frank** — Alexa ring with morning memory trigger, conversation bubbles, confusion detection (simulates Frank speaking to Alexa)
+- **Family** — Add Memory (conversational curation) + Frank's Week (mood, confusion rate, insight narrative) (simulates family interacting with Alexa)
 
 For development with hot reload:
 
@@ -438,7 +441,7 @@ Folkore works end-to-end at demo scale. The memory pipeline is real — DynamoDB
 ### Stage 2 — Richer Memory
 
 - **Multi-person households** — support multiple parents under one family account, each with their own memory graph and confusion tracking
-- **Voice-native curation** — family members add memories by talking to Alexa directly: "Alexa, remember that Dad proposed to Mom at Lake Tahoe in 1971." No web UI required.
+- **Voice-native curation** — multi-turn memory intake where Alexa asks follow-up questions to fill gaps: "You said Sarah visited — when was that? Anything else about that visit worth remembering?"
 - **Photo memories** — when Amazon opens photo ingestion to third-party MCP tools, family sends a photo through the Alexa app; Folkore calls a vision model to extract names, faces, and context and stores it as a voice-retrievable memory Frank can ask about
 - **Memory aging** — surface recently added memories more often; rotate older ones back in on anniversaries or relevant dates
 
