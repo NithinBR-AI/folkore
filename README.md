@@ -48,8 +48,8 @@ Alexa+ ──► MCP Tool ──► Supervisor ──► Specialist Agent ──
 
 A TypeScript MCP server built to spec 2025-11-25 using Streamable HTTP transport exposes two tools to Alexa+:
 
-- **`get_memory`** — semantic search over the parent's personal memory graph; called by the Conversation Agent on every turn before responding.
-- **`add_memory`** — validates and stores a new memory from a family member, extracts named entities into the graph, and syncs to Bedrock Knowledge Base.
+- **`converse`** — the primary entry point for every utterance. The Supervisor classifies intent and routes to the right specialist agent automatically. Parent speaking, family adding a memory, or family asking for a summary — one tool handles all three.
+- **`morning_memory`** — proactive trigger, called each morning to surface the least-recently-referenced memory in Frank's graph. In Stage 3 this fires via EventBridge automatically; the demo uses a manual trigger.
 
 Every request passes through a Supervisor that classifies intent — a single lightweight LLM call with no tools — and routes to one of three specialist agents, each running a real agentic tool-use loop where the LLM decides which tools to call and in which order. Parent utterances bypass classification entirely and route directly to the Conversation Agent, saving a full LLM round trip. No hardcoded function chains.
 
